@@ -86,7 +86,7 @@ public class UserServiceImpl implements UserService {
     public UserResponse updateMyProfile(UUID userId, UpdateUserProfileReq request) {
         User user = getUserById(userId);
         user.setName(request.name());
-        user.setLastname(request.bio());
+        user.setLastname(request.lastname());
         return toResponse(user);
     }
 
@@ -134,9 +134,13 @@ public class UserServiceImpl implements UserService {
                 user.getName(),
                 user.getLastname(),
                 user.getEmail(),
+                user.getPhone(),
+                user.getLanguage(),
+                user.getCountry(),
                 user.getRole(),
                 user.isActive(),
-                user.getJoinedAt()
+                user.getJoinedAt(),
+                user.getAvatar()
         );
     }
 

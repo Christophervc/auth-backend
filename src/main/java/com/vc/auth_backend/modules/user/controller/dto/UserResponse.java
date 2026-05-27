@@ -8,9 +8,14 @@ import java.util.UUID;
 public record UserResponse(
         UUID id,
         String name,
-        String fullName,
+        String lastname,
         String email,
+        String phone,
+        String language,
+        String country,
         Role role,
         boolean active,
-        LocalDateTime joinedAt) {
+        LocalDateTime joinedAt,
+        String avatar
+) {
 }

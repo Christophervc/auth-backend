@@ -7,6 +7,7 @@ public record UpdateUserProfileReq(
         @NotBlank(message = "Name cannot be empty")
         @Size(min = 2, max = 50)
         String name,
-        @Size(max = 500)
-        String bio
+        @NotBlank(message = "Last name cannot be empty")
+        @Size( min =2, max = 500)
+        String lastname
 ) {}

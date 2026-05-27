@@ -39,6 +39,18 @@ public class User {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column()
+    private String avatar;
+
+    @Column(length = 20)
+    private String phone;
+
+    @Column(length = 5)
+    private String country = "PE";
+
+    @Column(length = 5)
+    private String language = "es-ES";
+
     @Column(nullable = false)
     private LocalDateTime joinedAt;
 

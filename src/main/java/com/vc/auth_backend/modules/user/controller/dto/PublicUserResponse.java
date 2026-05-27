@@ -6,6 +6,6 @@ import java.util.UUID;
 public record PublicUserResponse(
         UUID id,
         String name,
-        String bio,
+        String lastname,
         LocalDateTime joinedAt
 ) {}

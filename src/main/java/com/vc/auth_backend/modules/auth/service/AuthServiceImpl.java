@@ -59,6 +59,8 @@ public class AuthServiceImpl implements AuthenticationService {
                 .password(passwordEncoder.encode(request.password()))
                 .role(Role.USER)
                 .active(true)
+                .country("PE")
+                .language("es-ES")
                 .build();
         userRepository.save(newUser);
         UserDetails userDetails = new CustomUserPrincipal(newUser);
