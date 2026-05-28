@@ -41,7 +41,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         boolean isAuthRequest = requestUri.startsWith("/api/v1/auth/login") || requestUri.startsWith("/api/v1/auth/register");
 
         String clientId = resolveClientId(request);
-        String bucketKey = (isAuthRequest? "AUTH:" : "GEN:") + clientId;
+        String bucketKey = (isAuthRequest ? "AUTH:" : "GEN:") + clientId;
 
         Bucket bucket = rateLimitingService.resolveBucket(bucketKey, isAuthRequest);
 
@@ -57,7 +57,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
                 HttpStatus.TOO_MANY_REQUESTS, "Too many requests, please wait");
         problemDetail.setTitle("Rate Limit Exceeded");
-        response.getWriter().write(jsonMapper.writeValueAsString(problemDetail));
+        jsonMapper.writeValue(response.getWriter(), problemDetail);
         response.getWriter().flush();
     }
 

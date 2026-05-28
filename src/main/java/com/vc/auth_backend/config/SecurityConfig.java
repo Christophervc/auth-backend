@@ -2,7 +2,9 @@ package com.vc.auth_backend.config;
 
 import com.vc.auth_backend.modules.auth.jwt.JwtAuthenticationFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.core.util.Json;
 import jakarta.servlet.DispatcherType;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -22,12 +24,16 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+    private final JsonMapper jsonMapper;
+
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
@@ -41,7 +47,7 @@ public class SecurityConfig {
                             ProblemDetail pd = ProblemDetail.forStatusAndDetail(
                                     HttpStatus.UNAUTHORIZED, "Authentication required");
                             pd.setTitle("Unauthorized");
-                            new ObjectMapper().writeValue(response.getWriter(), pd);
+                            jsonMapper.writeValue(response.getWriter(), pd);
                         })
                         .accessDeniedHandler((request, response, deniedException) -> {
                             response.setStatus(HttpStatus.FORBIDDEN.value());
@@ -49,16 +55,19 @@ public class SecurityConfig {
                             ProblemDetail pd = ProblemDetail.forStatusAndDetail(
                                     HttpStatus.FORBIDDEN, "Access Denied");
                             pd.setTitle("Forbidden");
-                            new ObjectMapper().writeValue(response.getWriter(), pd);
+                            jsonMapper.writeValue(response.getWriter(), pd);
                         })
                 )
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.ASYNC).permitAll()
                         .requestMatchers("/error").permitAll() // dispatchers error y async para SSE
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/v1/auth/login",
+                                "/api/v1/auth/register",
+                                "/api/v1/auth/refresh",
+                                "/api/v1/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout-all").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/register",
-                                "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/media/**").authenticated()
                         .anyRequest().authenticated()
                 )
@@ -89,6 +98,7 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
         return source;
