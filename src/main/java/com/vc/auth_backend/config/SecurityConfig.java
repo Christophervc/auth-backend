@@ -1,8 +1,6 @@
 package com.vc.auth_backend.config;
 
 import com.vc.auth_backend.modules.auth.jwt.JwtAuthenticationFilter;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.swagger.v3.core.util.Json;
 import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;

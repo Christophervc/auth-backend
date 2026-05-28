@@ -87,6 +87,7 @@ public class UserServiceImpl implements UserService {
         User user = getUserById(userId);
         user.setName(request.name());
         user.setLastname(request.lastname());
+        user.setPhone(request.phone());
         return toResponse(user);
     }
 
