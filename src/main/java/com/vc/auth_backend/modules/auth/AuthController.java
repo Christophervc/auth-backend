@@ -106,18 +106,45 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("All sessions logged out"));
     }
 
+    @Operation(
+            summary = "Solicitar codigo de recuperacion",
+            description = """
+                    Envía un código OTP de 6 dígitos al email indicado.
+                    Responde 200 OK sin revelar si el email está registrado (email enumeration)
+                    El código expira en 10 minutos y es de un solo uso.
+                    Rate limit: 3 solicitudes por hora por IP.
+                    """
+    )
     @PostMapping("/forgot-password")
     public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         passwordResetService.requestPasswordReset(request);
         return ResponseEntity.ok(new MessageResponse("If the email is registered, you will receive a recovery code shortly."));
     }
 
+    @Operation(
+            summary = "Verificar codigo OTP",
+            description = """
+                    Valida que el código OTP sea correcto y no haya expirado.
+                    NO consume el código ni cambia la contraseña.
+                    Paso intermedio para que el frontend confirme el código antes de mostrar el formulario de nueva contraseña.
+                    """
+    )
     @PostMapping("/verify-otp")
     public ResponseEntity<MessageResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
         passwordResetService.verifyOtp(request);
         return ResponseEntity.ok(new MessageResponse("Code is valid. You can now reset your password."));
     }
 
+    @Operation(
+            summary = "Restablecer contrasena",
+            description = """
+                    Valida el código OTP y establece la nueva contraseña.
+                    Si el código es válido:
+                      - La nueva contraseña queda establecida.
+                      - El código OTP se marca como usado (no reutilizable).
+                      - Todas las sesiones activas del usuario son revocadas.
+                    """
+    )
     @PostMapping("/reset-password")
     public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         passwordResetService.resetPassword(request);
