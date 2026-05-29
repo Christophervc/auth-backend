@@ -120,6 +120,25 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problemDetail;
     }
 
+    @ExceptionHandler(InvalidOtpException.class)
+    public ProblemDetail handleInvalidOtp(InvalidOtpException ex) {
+        log.warn("Invalid OTP attempt: {}", ex.getMessage());
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("Invalid or expired code");
+        return pd;
+    }
+
+    @ExceptionHandler(EmailDeliveryException.class)
+    public ProblemDetail handleEmailDelivery(EmailDeliveryException ex) {
+        log.error("Email delivery failed: {}", ex.getMessage());
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Could not send email at this time. Please try again later.");
+        pd.setTitle("Email service unavailable");
+        return pd;
+    }
+
     @ExceptionHandler(ExternalServiceUnavailableException.class)
     public ProblemDetail handleExternalServiceUnavailableException(ExternalServiceUnavailableException ex) {
         log.error("External service error: {}", ex.getMessage());

@@ -1,13 +1,11 @@
 package com.vc.auth_backend.modules.auth;
 
 import com.vc.auth_backend.config.OpenApiConfig;
-import com.vc.auth_backend.modules.auth.dto.AuthResponse;
-import com.vc.auth_backend.modules.auth.dto.LoginRequest;
-import com.vc.auth_backend.modules.auth.dto.RefreshTokenRequest;
-import com.vc.auth_backend.modules.auth.dto.RegisterRequest;
+import com.vc.auth_backend.modules.auth.dto.*;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.auth.service.AuthenticationService;
 import com.vc.auth_backend.modules.auth.service.CookieService;
+import com.vc.auth_backend.modules.auth.service.PasswordResetService;
 import com.vc.auth_backend.modules.auth.service.RefreshTokenService;
 import com.vc.auth_backend.modules.user.controller.dto.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,6 +33,7 @@ public class AuthController {
     private final AuthenticationService authenticationService;
     private final RefreshTokenService refreshTokenService;
     private final CookieService cookieService;
+    private final PasswordResetService passwordResetService;
 
     @Operation(
             summary = "Iniciar sesion",
@@ -105,5 +104,23 @@ public class AuthController {
         refreshTokenService.logoutAll(currentUser.getId());
         cookieService.clearAuthCookies(response);
         return ResponseEntity.ok(new MessageResponse("All sessions logged out"));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestPasswordReset(request);
+        return ResponseEntity.ok(new MessageResponse("If the email is registered, you will receive a recovery code shortly."));
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<MessageResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        passwordResetService.verifyOtp(request);
+        return ResponseEntity.ok(new MessageResponse("Code is valid. You can now reset your password."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request);
+        return ResponseEntity.ok(new MessageResponse("Password updated successfully. Please log in with your new password."));
     }
 }
