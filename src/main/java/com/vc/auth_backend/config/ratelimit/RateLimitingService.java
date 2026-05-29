@@ -27,12 +27,22 @@ public class RateLimitingService {
             .refillIntervally(10, Duration.ofMinutes(1))
             .build();
 
-    public Bucket resolveBucket(String key, boolean isAuthRequest) {
-        return cache.get(key, k -> buildBucket(isAuthRequest));
+    private final Bandwidth otpLimit = Bandwidth.builder()
+            .capacity(3)
+            .refillIntervally(3, Duration.ofHours(1))
+            .build();
+
+    public Bucket resolveBucket(String key, boolean isAuthRequest, boolean isOtpRequest) {
+        return cache.get(key, k -> buildBucket(isAuthRequest, isOtpRequest));
     }
 
-    private Bucket buildBucket(boolean isAuthRequest) {
-        Bandwidth limit =  isAuthRequest ? authLimit
+    public Bucket resolveBucket(String key, boolean isAuthRequest) {
+        return resolveBucket(key, isAuthRequest, false);
+    }
+
+    private Bucket buildBucket(boolean isAuthRequest,  boolean isOtpRequest) {
+        Bandwidth limit =  isOtpRequest  ? otpLimit
+                : isAuthRequest ? authLimit
                 : generalLimit;
         return Bucket.builder().addLimit(limit).build();
     }
