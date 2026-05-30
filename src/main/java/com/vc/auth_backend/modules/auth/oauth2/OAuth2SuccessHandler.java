@@ -10,6 +10,7 @@ import com.vc.auth_backend.modules.user.entity.User;
 import com.vc.auth_backend.modules.user.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -36,7 +37,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     @Value("${app.oauth2.redirect-uri.success}")
     private String successRedirectUri;
 
-    @Value("${app.oauth2.redirect-uri.failure:http://localhost:3000/auth/callback}")
+    @Value("${app.oauth2.redirect-uri.failure}")
     private String failureRedirectUri;
 
     @Override
@@ -51,8 +52,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         // Normalizar los atributos del proveedor a nuestro contrato interno
         OAuth2UserInfo userInfo = OAuth2UserInfoFactory.getOAuth2UserInfo(
-                registrationId,
-                oauthToken.getPrincipal().getAttributes());
+                registrationId, oauthToken.getPrincipal().getAttributes());
 
         log.debug("OAuth2 success: provider={} email={}", registrationId, userInfo.getEmail());
 
@@ -65,7 +65,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             OAuth2UserInfo userInfo,
             String registrationId) throws IOException {
 
-        // Escenario A: ya existe una cuenta OAuth con este proveedor e ID
+        // ya existe una cuenta OAuth con este proveedor e ID
         Optional<User> existingOAuthUser =
                 userRepository.findByProviderAndProviderId(registrationId, userInfo.getId());
 
@@ -76,16 +76,17 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             return;
         }
 
-        // Escenario B: el email ya existe pero es cuenta local
+        // el email ya existe pero es cuenta local
         Optional<User> existingLocalUser = userRepository.findByEmail(userInfo.getEmail());
         if (existingLocalUser.isPresent()) {
             log.warn("OAuth2 email conflict: email={} already registered as local account",
                     userInfo.getEmail());
+            invalidateSession(request);
             redirectWithError(response, "EMAIL_EXISTS_WITH_PASSWORD");
             return;
         }
 
-        // Escenario C: usuario completamente nuevo → crear cuenta
+        // usuario completamente nuevo → crear cuenta
         User newUser = createOAuthUser(userInfo, registrationId);
         log.info("New user registered via OAuth2: provider={} userId={}", registrationId, newUser.getId());
         issueTokensAndRedirect(request, response, newUser);
@@ -149,9 +150,17 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         // El frontend no necesita leer el token de la URL — lo recibirá
         // automáticamente en cada request a través de las cookies.
         cookieService.addAuthCookies(response, authResponse);
-
+        invalidateSession(request);
         log.info("OAuth2 tokens issued for userId={}", user.getId());
         getRedirectStrategy().sendRedirect(request, response, successRedirectUri);
+    }
+
+    private void invalidateSession(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+            log.debug("OAuth2 session invalidated");
+        }
     }
 
     private void redirectWithError(HttpServletResponse response, String errorCode) throws IOException {

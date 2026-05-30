@@ -24,6 +24,7 @@ import java.util.UUID;
 @Slf4j
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
+    // validacion
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex,
@@ -31,95 +32,108 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             @NonNull HttpStatusCode status,
             @NonNull WebRequest request) {
 
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST,
                 "Validation failed for one or more fields"
         );
-        problemDetail.setType(URI.create("about:blank"));
-        problemDetail.setTitle("Bad Request");
-        // Recolectar errores de los Records (ej. RegisterRequest)
+        pd.setType(URI.create("about:blank"));
+        pd.setTitle("Bad Request");
         Map<String, String> errors = new HashMap<>();
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             errors.put(fieldError.getField(), fieldError.getDefaultMessage());
         }
-        problemDetail.setProperty("errors", errors);
+        pd.setProperty("errors", errors);
         log.warn("Validation error: {}", errors);
 
-        return new ResponseEntity<>(problemDetail, headers, status);
+        return new ResponseEntity<>(pd, headers, status);
     }
 
+    // persistencia
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrityViolationException(DataIntegrityViolationException ex) {
         log.warn("Database constraint violation: {}", ex.getMessage());
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT,
                 "A record with this unique identifier already exists (e.g., duplicate email).");
-        problemDetail.setTitle("Data integrity violation");
-        return problemDetail;
+        pd.setTitle("Data integrity violation");
+        return pd;
     }
 
     @ExceptionHandler(EntityNotFoundException.class)
     public ProblemDetail handleEntityNotFoundException(EntityNotFoundException ex) {
         log.warn("Resource not found: {}", ex.getMessage());
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-        problemDetail.setTitle("Resource Not Found");
-        return problemDetail;
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        pd.setTitle("Resource Not Found");
+        return pd;
     }
 
+    // Argumentos y estado
     @ExceptionHandler(IllegalArgumentException.class)
     public ProblemDetail handleIllegalArgumentException(IllegalArgumentException ex) {
         log.warn("Illegal argument provided: {}", ex.getMessage());
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-        problemDetail.setTitle("Bad Request");
-        return problemDetail;
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("Bad Request");
+        return pd;
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ProblemDetail handleIllegalStateException(IllegalStateException ex) {
         log.warn("Illegal state conflict: {}", ex.getMessage());
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-        problemDetail.setTitle("Conflict");
-        return problemDetail;
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        pd.setTitle("Conflict");
+        return pd;
     }
 
+    // Autenticacion y autorizacion
     @ExceptionHandler(DisabledException.class)
     public ProblemDetail handleAccountSuspendedException(DisabledException ex) {
         log.warn("Account is disabled/suspended: {}", ex.getMessage());
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN,
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN,
                 "Account is disabled/suspended, please contact support.");
-        problemDetail.setTitle("Account Suspended");
-        return problemDetail;
-    }
-
-    @ExceptionHandler(MaxSessionsExceededException.class)
-    public ProblemDetail handleMaxSessionsExceededException(MaxSessionsExceededException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT, // 409
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Limit of allowed sessions reached");
-        return problemDetail;
+        pd.setTitle("Account Suspended");
+        return pd;
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ProblemDetail handleBadCredentialsException(BadCredentialsException ex) {
         log.warn("Failed authenticate attempt: Incorrect credentials");
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Incorrect email or password");
-        problemDetail.setTitle("Unauthorized");
-        return problemDetail;
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Incorrect email or password");
+        pd.setTitle("Unauthorized");
+        return pd;
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ProblemDetail handleAccessDeniedException(AccessDeniedException ex) {
         log.warn("Access denied: {}", ex.getMessage());
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
                 HttpStatus.FORBIDDEN,
                 ex.getMessage()
         );
-        problemDetail.setTitle("Access Denied");
-        return problemDetail;
+        pd.setTitle("Access Denied");
+        return pd;
     }
 
+    // sesiones
+    @ExceptionHandler(MaxSessionsExceededException.class)
+    public ProblemDetail handleMaxSessionsExceededException(MaxSessionsExceededException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, // 409
+                ex.getMessage()
+        );
+        pd.setTitle("Limit of allowed sessions reached");
+        return pd;
+    }
+
+    @ExceptionHandler(InvalidExceptionToken.class)
+    public ProblemDetail handleInvalidExceptionToken(InvalidExceptionToken ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED,
+                ex.getMessage());
+        pd.setTitle("Invalid Token");
+        return pd;
+    }
+
+    // OTP
     @ExceptionHandler(InvalidOtpException.class)
     public ProblemDetail handleInvalidOtp(InvalidOtpException ex) {
         log.warn("Invalid OTP attempt: {}", ex.getMessage());
@@ -129,12 +143,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return pd;
     }
 
+    // OAuth
+    @ExceptionHandler(OAuth2AccountException.class)
+    public ProblemDetail handleOAuth2Account(OAuth2AccountException ex) {
+        log.warn("OAuth2 account operation not allowed: {}", ex.getMessage());
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("Operation not available for social accounts");
+        return pd;
+    }
+
+    // servicios externos
     @ExceptionHandler(EmailDeliveryException.class)
     public ProblemDetail handleEmailDelivery(EmailDeliveryException ex) {
         log.error("Email delivery failed: {}", ex.getMessage());
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "Could not send email at this time. Please try again later.");
+                HttpStatus.SERVICE_UNAVAILABLE, "Could not send email at this time. Please try again later.");
         pd.setTitle("Email service unavailable");
         return pd;
     }
@@ -142,22 +165,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ExternalServiceUnavailableException.class)
     public ProblemDetail handleExternalServiceUnavailableException(ExternalServiceUnavailableException ex) {
         log.error("External service error: {}", ex.getMessage());
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.SERVICE_UNAVAILABLE, "The image upload service is temporarily unavailable. Please try again later."
-        );
-        problemDetail.setTitle("External service is unavailable");
-        return problemDetail;
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE, "An external service is temporarily unavailable. Please try again later.");
+        pd.setTitle("External service is unavailable");
+        return pd;
     }
 
-    @ExceptionHandler(InvalidExceptionToken.class)
-    public ProblemDetail handleInvalidExceptionToken(InvalidExceptionToken ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.UNAUTHORIZED,
-                ex.getMessage());
-        problemDetail.setTitle("Invalid Token");
-        return problemDetail;
-    }
-
+    // catch-all
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleAllUncaughtException(Exception ex) {
         // Generar un ID de traza para buscar el error exacto en los logs

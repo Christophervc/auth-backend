@@ -3,6 +3,7 @@ package com.vc.auth_backend.modules.auth.oauth2;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
@@ -15,13 +16,13 @@ import java.io.IOException;
 @Component
 public class OAuth2FailureHandler extends SimpleUrlAuthenticationFailureHandler {
 
-    @Value("${app.oauth2.redirect-uri.failure:http://localhost:3000/auth/callback}")
+    @Value("${app.oauth2.redirect-uri.failure}")
     private String failureRedirectUri;
 
     @Override
     public void onAuthenticationFailure(
-            HttpServletRequest request,
-            HttpServletResponse response,
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
             AuthenticationException exception) throws IOException {
 
         // Loguear con detalle en servidor para debugging, pero no exponer al cliente

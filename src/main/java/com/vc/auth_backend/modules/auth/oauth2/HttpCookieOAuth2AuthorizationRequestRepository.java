@@ -17,7 +17,6 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class HttpCookieOAuth2AuthorizationRequestRepository implements
         AuthorizationRequestRepository<OAuth2AuthorizationRequest> {
-
     public static final String OAUTH2_STATE_COOKIE = "OAUTH2_STATE";
     private static final int COOKIE_EXPIRE_SECONDS = 600;
 
@@ -57,13 +56,10 @@ public class HttpCookieOAuth2AuthorizationRequestRepository implements
 
     // cookie helpers
     private void addStateCookie(HttpServletResponse response, String state) {
-        // SameSite=Lax (no Strict) porque el callback de Google es cross-site.
-        // HttpOnly evita que JavaScript lea el state, pero SameSite=Lax
-        // sigue siendo seguro: el state mismo es el mecanismo anti-CSRF.
         ResponseCookie cookie = ResponseCookie.from(OAUTH2_STATE_COOKIE, state)
                 .httpOnly(true)
                 .secure(false) // true en producción con HTTPS
-                .sameSite("Lax")
+                .sameSite("Lax") // el callback de Google es cross-site
                 .path("/")
                 .maxAge(COOKIE_EXPIRE_SECONDS)
                 .build();

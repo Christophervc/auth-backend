@@ -9,7 +9,11 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "users",
-        uniqueConstraints = {@UniqueConstraint(name = "uk_users_provider_provider_id", columnNames = {"provider", "provider_id"})
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name  = "uk_users_provider_provider_id",
+                        columnNames = {"provider", "provider_id"}
+                )
         })
 @NoArgsConstructor
 @AllArgsConstructor
