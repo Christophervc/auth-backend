@@ -48,6 +48,13 @@ public class PasswordResetService {
             return;
         }
         User user = userOpt.get();
+
+        if (user.isOAuthUser()) {
+            log.debug("Password reset silently skipped for OAuth user: provider={} email={}",
+                    user.getProvider(), user.getEmail());
+            return;
+        }
+
         otpRepository.invalidateActiveOtpsByUserId(user.getId(), Instant.now());
 
         String rawCode   = generateOtpCode();
@@ -68,14 +75,14 @@ public class PasswordResetService {
 
     @Transactional(readOnly = true)
     public void verifyOtp(VerifyOtpRequest request){
-        User user = findActiveUserByEmail(request.email());
+        User user = findActiveLocalUserByEmail(request.email());
         loadAndValidateOtp(user.getId(), request.code());
         log.debug("OTP verified (not consumed) for userId={}", user.getId());
     }
 
     @Transactional
     public void resetPassword(ResetPasswordRequest request){
-        User user = findActiveUserByEmail(request.email());
+        User user = findActiveLocalUserByEmail(request.email());
         PasswordResetOtp otp = loadAndValidateOtp(user.getId(), request.code());
         otp.setUsed(true);
         otpRepository.save(otp);
@@ -90,6 +97,13 @@ public class PasswordResetService {
     private String generateOtpCode() {
         int code = secureRandom.nextInt(1_000_000);
         return String.format("%06d", code);
+    }
+
+    private User findActiveLocalUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .filter(User::isActive)
+                .filter(User::isLocalUser) // usuarios OAuth no tienen contraseña
+                .orElseThrow(() -> new InvalidOtpException("Invalid or expired code"));
     }
 
     private User findActiveUserByEmail(String email){

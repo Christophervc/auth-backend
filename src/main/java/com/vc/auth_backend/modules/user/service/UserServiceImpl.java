@@ -9,6 +9,7 @@ import com.vc.auth_backend.modules.user.controller.dto.UserResponse;
 import com.vc.auth_backend.modules.user.repository.UserRepository;
 import com.vc.auth_backend.modules.user.entity.Role;
 import com.vc.auth_backend.modules.user.entity.User;
+import com.vc.auth_backend.shared.exception.OAuth2AccountException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -110,6 +111,11 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void changePassword(UUID userId, ChangePasswordReq request) {
         User user = getUserById(userId);
+
+        assertLocalUser(user, "Password management is not available for accounts linked to "
+                + user.getProvider() + ". Please sign in with "
+                + capitalize(user.getProvider()) + " to access your account.");
+
         if (!passwordEncoder.matches(request.oldPassword(), user.getPassword())) {
             throw new BadCredentialsException("The current password is invalid");
         }
@@ -129,6 +135,17 @@ public class UserServiceImpl implements UserService {
         log.info("User {} has deactivate his/her account ", user.getEmail());
     }
 
+    private void assertLocalUser(User user, String message) {
+        if (user.isOAuthUser()) {
+            throw new OAuth2AccountException(message);
+        }
+    }
+
+    private String capitalize(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return s.substring(0, 1).toUpperCase() + s.substring(1);
+    }
+
     private UserResponse toResponse(User user) {
         return new UserResponse(
                 user.getId(),
@@ -141,7 +158,8 @@ public class UserServiceImpl implements UserService {
                 user.getRole(),
                 user.isActive(),
                 user.getJoinedAt(),
-                user.getAvatar()
+                user.getAvatar(),
+                user.getProvider()
         );
     }
 

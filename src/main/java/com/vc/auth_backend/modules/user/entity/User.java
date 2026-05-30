@@ -8,7 +8,9 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users",
+        uniqueConstraints = {@UniqueConstraint(name = "uk_users_provider_provider_id", columnNames = {"provider", "provider_id"})
+        })
 @NoArgsConstructor
 @AllArgsConstructor
 @Getter
@@ -23,7 +25,7 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(nullable = false)
+    @Column
     private String password;
 
     @Column(nullable = false)
@@ -53,6 +55,22 @@ public class User {
 
     @Column(nullable = false)
     private LocalDateTime joinedAt;
+
+    // oauth
+    @Builder.Default
+    @Column(nullable = false, length = 20)
+    private String provider = "local";
+
+    @Column(name = "provider_id")
+    private String providerId;
+
+    public boolean isLocalUser() {
+        return "local".equals(this.provider);
+    }
+
+    public boolean isOAuthUser() {
+        return !isLocalUser();
+    }
 
     @Override
     public boolean equals(Object o) {

@@ -1,6 +1,9 @@
 package com.vc.auth_backend.config;
 
 import com.vc.auth_backend.modules.auth.jwt.JwtAuthenticationFilter;
+import com.vc.auth_backend.modules.auth.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
+import com.vc.auth_backend.modules.auth.oauth2.OAuth2FailureHandler;
+import com.vc.auth_backend.modules.auth.oauth2.OAuth2SuccessHandler;
 import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -31,6 +34,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
     private final JsonMapper jsonMapper;
+    private final OAuth2SuccessHandler oauth2SuccessHandler;
+    private final OAuth2FailureHandler oauth2FailureHandler;
+    private final HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository;
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -74,11 +80,24 @@ public class SecurityConfig {
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                 )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class);
+                .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class).oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(authEndpoint ->
+                                // Aquí registramos nuestro repositorio de cookies para guardar
+                                // el OAuth2AuthorizationRequest de forma stateless
+                                authEndpoint.authorizationRequestRepository(cookieAuthorizationRequestRepository)
+                        )
+                        .redirectionEndpoint(redirect ->
+                                // URI donde Google redirige de vuelta con el authorization code.
+                                // Debe coincidir exactamente con lo configurado en Google Cloud Console.
+                                redirect.baseUri("/login/oauth2/code/*")
+                        )
+                        .successHandler(oauth2SuccessHandler)
+                        .failureHandler(oauth2FailureHandler)
+                );
         return http.build();
     }
 

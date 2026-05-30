@@ -16,6 +16,7 @@ public record UserResponse(
         Role role,
         boolean active,
         LocalDateTime joinedAt,
-        String avatar
+        String avatar,
+        String provider
 ) {
 }
