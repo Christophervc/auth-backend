@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,16 +18,44 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
 
     Optional<RefreshToken> findByToken(String token);
 
+    @Query("""
+            SELECT r FROM RefreshToken r
+            WHERE r.user = :user
+              AND r.revoked = false
+              AND r.expiryDate > :now
+            ORDER BY r.lastUsedAt DESC
+            """)
+    List<RefreshToken> findActiveSessionsByUser(
+            @Param("user") User user,
+            @Param("now") Instant now);
+
+    @Query("""
+            SELECT COUNT(r) FROM RefreshToken r
+            WHERE r.user = :user
+              AND r.revoked = false
+              AND r.expiryDate > :now
+            """)
+    int countActiveSessionsByUser(
+            @Param("user") User user,
+            @Param("now") Instant now);
+
     @Modifying
-    @Query("DELETE FROM RefreshToken r WHERE r.user = :user")
-    void deleteByUser(@Param("user") User user);
+    @Query("""
+            UPDATE RefreshToken r
+            SET r.lastUsedAt = :now
+            WHERE r.token = :token
+            """)
+    void updateLastUsedAt(
+            @Param("token") String token,
+            @Param("now") Instant now);
 
     @Modifying // update to revoked refresh token
     @Query("UPDATE RefreshToken r SET r.revoked = true WHERE r.user = :user")
     void revokeAllUserTokens(@Param("user") User user);
 
-    @Query("SELECT COUNT(r) FROM RefreshToken r WHERE r.user = :user AND r.revoked = false AND r.expiryDate > :now")
-    int countActiveSessionsByUser(@Param("user") User user, @Param("now") Instant now);
+    @Modifying
+    @Query("DELETE FROM RefreshToken r WHERE r.user = :user")
+    void deleteByUser(@Param("user") User user);
 
     @Modifying
     @Query("DELETE FROM RefreshToken r WHERE r.user = :user AND r.expiryDate <= :now")

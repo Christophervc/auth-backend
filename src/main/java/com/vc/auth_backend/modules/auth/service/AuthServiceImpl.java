@@ -10,7 +10,9 @@ import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.user.entity.Role;
 import com.vc.auth_backend.modules.user.entity.User;
 import com.vc.auth_backend.modules.user.repository.UserRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -30,13 +32,14 @@ public class AuthServiceImpl implements AuthenticationService {
     private final RefreshTokenService refreshTokenService;
 
     @Override
-    public AuthResponse authenticate(LoginRequest request) {
+    public AuthResponse authenticate(LoginRequest request, HttpServletRequest httpRequest) {
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.email(), request.password())
-        );
+                new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+
         CustomUserPrincipal userDetails = (CustomUserPrincipal) authentication.getPrincipal();
         String accessToken = jwtService.generateToken(userDetails);
-        String refreshToken = refreshTokenService.createRefreshToken(userDetails.getId()).getToken();
+        String refreshToken = refreshTokenService
+                .createRefreshToken(userDetails.getId(), httpRequest).getToken();
         return AuthResponse.builder()
                 .token(accessToken)
                 .refreshToken(refreshToken)
@@ -46,7 +49,7 @@ public class AuthServiceImpl implements AuthenticationService {
 
     @Override
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request, HttpServletRequest httpRequest) {
         if (!request.password().equals(request.confirmPassword())) {
             throw new IllegalArgumentException("Passwords do not match");
         }
@@ -63,9 +66,11 @@ public class AuthServiceImpl implements AuthenticationService {
                 .language("es-ES")
                 .build();
         userRepository.save(newUser);
+
         UserDetails userDetails = new CustomUserPrincipal(newUser);
         String accessToken = jwtService.generateToken(userDetails);
-        String refreshToken = refreshTokenService.createRefreshToken(newUser.getId()).getToken();
+        String refreshToken = refreshTokenService
+                .createRefreshToken(newUser.getId(), httpRequest).getToken();
         return AuthResponse.builder()
                 .token(accessToken)
                 .refreshToken(refreshToken)
@@ -81,10 +86,13 @@ public class AuthServiceImpl implements AuthenticationService {
                 .map(refreshTokenService::verifyExpiration)
                 .map(RefreshToken::getUser)
                 .map(user -> {
+                            refreshTokenService.touchLastUsedAt(requestRefreshToken);
                             refreshTokenService.logout(requestRefreshToken);
                             CustomUserPrincipal userDetails = new CustomUserPrincipal(user);
                             String newAccessToken = jwtService.generateToken(userDetails);
-                            String newRefreshToken = refreshTokenService.createRefreshToken(user.getId()).getToken();
+                            String newRefreshToken = refreshTokenService
+                                    .createRefreshToken(user.getId()).getToken();
+
                             return AuthResponse.builder()
                                     .token(newAccessToken)
                                     .message("Token refreshed successfully")

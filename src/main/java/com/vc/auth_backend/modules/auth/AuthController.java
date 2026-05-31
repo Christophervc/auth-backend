@@ -19,10 +19,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -37,34 +37,34 @@ public class AuthController {
 
     @Operation(
             summary = "Iniciar sesion",
-            description = "Autentica al usuario con credenciales y escribe las cookies http-only de acceso y refresh."
-    )
+            description = "Autentica al usuario con credenciales y escribe las cookies http-only de acceso y refresh."+
+                        "Registra el dispositivo (browser, OS) para la lista de sesiones.")
     @PostMapping("/login")
     public ResponseEntity<MessageResponse> login(
             @Valid @RequestBody LoginRequest request,
-            @Parameter(hidden = true) HttpServletResponse response) {
-        AuthResponse authResponse = authenticationService.authenticate(request);
-        cookieService.addAuthCookies(response, authResponse);
+            @Parameter(hidden = true) HttpServletRequest httpRequest,
+            @Parameter(hidden = true) HttpServletResponse httpResponse) {
+        AuthResponse authResponse = authenticationService.authenticate(request, httpRequest);
+        cookieService.addAuthCookies(httpResponse, authResponse);
         return ResponseEntity.ok(new MessageResponse("Login successfully"));
     }
 
     @Operation(
             summary = "Registrar usuario",
-            description = "Crea una nueva cuenta y devuelve las cookies http-only necesarias para iniciar sesion."
-    )
+            description = "Crea una nueva cuenta y abre sesion. Registra el dispositivo inicial.")
     @PostMapping("/register")
     public ResponseEntity<MessageResponse> register(
             @Valid @RequestBody RegisterRequest request,
-            @Parameter(hidden = true) HttpServletResponse response) {
-        AuthResponse authResponse = authenticationService.register(request);
-        cookieService.addAuthCookies(response, authResponse);
+            @Parameter(hidden = true) HttpServletRequest httpRequest,
+            @Parameter(hidden = true) HttpServletResponse httpResponse) {
+        AuthResponse authResponse = authenticationService.register(request, httpRequest);
+        cookieService.addAuthCookies(httpResponse, authResponse);
         return new ResponseEntity<>(new MessageResponse(authResponse.message()), HttpStatus.CREATED);
     }
 
     @Operation(
             summary = "Refrescar sesion",
-            description = "Renueva el access token usando la cookie http-only refresh_token y vuelve a escribir las cookies de autenticacion."
-    )
+            description = "Rota el refresh token. Actualiza lastUsedAt de la sesion actual.")
     @PostMapping("/refresh")
     public ResponseEntity<MessageResponse> refresh(
             @Parameter(hidden = true) HttpServletRequest request,
@@ -78,8 +78,7 @@ public class AuthController {
 
     @Operation(
             summary = "Cerrar sesion actual",
-            description = "Invalida la sesion asociada al refresh token recibido por cookie y limpia las cookies de autenticacion del navegador."
-    )
+            description = "Revoca la sesion asociada al refresh token de la cookie.")
     @PostMapping("/logout")
     public ResponseEntity<MessageResponse> logout(
             @Parameter(hidden = true) HttpServletRequest request,
@@ -89,14 +88,12 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("Logged out successfully"));
     }
 
-    @Operation(
-            summary = "Cerrar todas las sesiones",
+    @Operation(summary = "Cerrar todas las sesiones",
             description = "Revoca todas las sesiones activas del usuario autenticado y elimina las cookies actuales.",
             security = {
                     @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME),
                     @SecurityRequirement(name = OpenApiConfig.COOKIE_SCHEME)
-            }
-    )
+            })
     @PostMapping("/logout-all")
     public ResponseEntity<MessageResponse> logoutAll(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal currentUser,
@@ -106,6 +103,53 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("All sessions logged out"));
     }
 
+    // Gestion de sesiones
+    @Operation(
+            summary = "Listar sesiones activas",
+            description = """
+                    Devuelve todas las sesiones activas del usuario autenticado,
+                    ordenadas por última actividad (más reciente primero).
+                    Cada sesión incluye el dispositivo, OS, IP y un flag 'current'
+                    que indica si es la sesión desde la que se hace esta request.
+                    """,
+            security = {
+                    @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME),
+                    @SecurityRequirement(name = OpenApiConfig.COOKIE_SCHEME)
+            }
+    )
+    @GetMapping("/sessions")
+    public ResponseEntity<List<SessionResponse>> getSessions(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal currentUser,
+            @Parameter(hidden = true) HttpServletRequest request) {
+        String currentRefreshToken = cookieService.getRefreshToken(request).orElse(null);
+        List<SessionResponse> sessions = refreshTokenService
+                .getActiveSessions(currentUser.getId(), currentRefreshToken);
+        return ResponseEntity.ok(sessions);
+    }
+
+    @Operation(
+            summary = "Cerrar sesion por ID",
+            description = """
+                    Revoca una sesion especifica del usuario autenticado.
+                    Solo el dueño de la sesion puede revocarla.
+                    Útil para cerrar sesion en un dispositivo remoto desde la
+                    pantalla de 'Seguridad de la cuenta'.
+                    """,
+            security = {
+                    @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME),
+                    @SecurityRequirement(name = OpenApiConfig.COOKIE_SCHEME)
+            }
+    )
+    @DeleteMapping("/sessions/{sessionId}")
+    public ResponseEntity<MessageResponse> revokeSession(
+            @Parameter(description = "ID de la sesion a revocar.")
+            @PathVariable UUID sessionId,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal currentUser) {
+        refreshTokenService.revokeSession(sessionId, currentUser.getId());
+        return ResponseEntity.ok(new MessageResponse("Session revoked successfully"));
+    }
+
+    // Recuperacion de contraseña con codigo OTP
     @Operation(
             summary = "Solicitar codigo de recuperacion",
             description = """

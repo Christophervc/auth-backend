@@ -136,21 +136,20 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             User user) throws IOException {
 
         CustomUserPrincipal principal = new CustomUserPrincipal(user);
-
         String accessToken = jwtService.generateToken(principal);
-        String refreshToken = refreshTokenService.createRefreshToken(user.getId()).getToken();
+        // pasar request para capturar user-agent del browser que hizo oauth2
+        String refreshToken = refreshTokenService.createRefreshToken(user.getId(), request).getToken();
 
         AuthResponse authResponse = AuthResponse.builder()
                 .token(accessToken)
                 .refreshToken(refreshToken)
                 .message("OAuth2 login successful")
                 .build();
-
         // Las cookies http-only quedan seteadas en el browser.
         // El frontend no necesita leer el token de la URL — lo recibirá
         // automáticamente en cada request a través de las cookies.
         cookieService.addAuthCookies(response, authResponse);
-        invalidateSession(request);
+        invalidateSession(request); // limpiar sesión OAuth2 tras emitir JWT
         log.info("OAuth2 tokens issued for userId={}", user.getId());
         getRedirectStrategy().sendRedirect(request, response, successRedirectUri);
     }
