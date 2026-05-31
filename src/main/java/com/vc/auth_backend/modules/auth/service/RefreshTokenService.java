@@ -62,6 +62,7 @@ public class RefreshTokenService {
                 .revoked(false)
                 .deviceName(deviceInfo.deviceName())
                 .os(deviceInfo.os())
+                .deviceType(deviceInfo.deviceType())
                 .ipAddress(ipAddress)
                 .build();
         return refreshTokenRepository.save(refreshToken);

@@ -13,9 +13,9 @@ public class UserAgentParser {
             return new DeviceInfo("Unknown", "Unknown", DeviceType.UNKNOWN);
         }
 
-        String os         = detectOs(userAgent);
-        DeviceType type   = detectDeviceType(userAgent, os);
-        String browser    = detectBrowser(userAgent);
+        String os = detectOs(userAgent);
+        DeviceType type = detectDeviceType(userAgent, os);
+        String browser = detectBrowser(userAgent);
 
         return new DeviceInfo(browser, os, type);
     }
@@ -44,30 +44,33 @@ public class UserAgentParser {
             String version = extractVersion(ua, "Mac OS X ", ")");
             return "macOS" + (version.isEmpty() ? "" : " " + version.replace("_", "."));
         }
-        // Linux
         if (ua.contains("Linux") && !ua.contains("Android")) return "Linux";
-        // Chrome OS
         if (ua.contains("CrOS")) return "Chrome OS";
 
         return "Unknown";
     }
 
     private DeviceType detectDeviceType(String ua, String os) {
-        // Móvil
-        if (ua.contains("Mobile") || ua.contains("iPhone")
-                || os.startsWith("Android") || os.startsWith("iOS")) {
+        boolean isMobileOs = os.startsWith("Android") || os.startsWith("iOS");
+        boolean isMobileUa = ua.contains("Mobile")   || ua.contains("iPhone");
 
-            if (ua.contains("iPad") || (os.startsWith("Android") && !ua.contains("Mobile"))) {
-                return DeviceType.TABLET;
-            }
-            return DeviceType.MOBILE;
+        if (isMobileOs || isMobileUa) {
+            boolean isTablet = ua.contains("iPad")
+                    || os.startsWith("iPadOS")
+                    || (os.startsWith("Android") && !ua.contains("Mobile"));
+            return isTablet ? DeviceType.TABLET : DeviceType.MOBILE;
         }
-        // iPad
+
         if (ua.contains("iPad") || os.startsWith("iPadOS")) {
             return DeviceType.TABLET;
         }
 
-        if (ua.contains("Windows") || ua.contains("Macintosh")
+        if (os.startsWith("Windows")   || os.startsWith("macOS")
+                || os.startsWith("Linux") || os.startsWith("Chrome OS")) {
+            return DeviceType.DESKTOP;
+        }
+        // Fallback: UA raw en caso de que detectOs() haya devuelto "Unknown"
+        if (ua.contains("Windows")   || ua.contains("Macintosh")
                 || ua.contains("Linux") || ua.contains("CrOS")) {
             return DeviceType.DESKTOP;
         }
