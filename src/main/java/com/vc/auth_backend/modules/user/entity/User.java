@@ -1,5 +1,6 @@
 package com.vc.auth_backend.modules.user.entity;
 
+import com.vc.auth_backend.shared.util.AesEncryptedStringConverter;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -75,6 +76,19 @@ public class User {
     public boolean isOAuthUser() {
         return !isLocalUser();
     }
+
+    // 2FA
+    @Column(name = "two_factor_enabled", nullable = false)
+    @Builder.Default
+    private boolean twoFactorEnabled = false;
+
+    @Column(name = "two_factor_secret", length = 512)
+    @Convert(converter = AesEncryptedStringConverter.class)
+    private String twoFactorSecret;
+
+    @Column(name = "backup_codes", columnDefinition = "TEXT")
+    @Convert(converter = AesEncryptedStringConverter.class)
+    private String backupCodesJson; // JSON array de hashes BCrypt
 
     @Override
     public boolean equals(Object o) {
