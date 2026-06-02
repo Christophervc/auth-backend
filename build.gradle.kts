@@ -33,6 +33,8 @@ dependencies {
     implementation("com.bucket4j:bucket4j-core:8.10.1")
     implementation("com.github.ben-manes.caffeine:caffeine")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
 
     runtimeOnly("org.postgresql:postgresql")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
@@ -47,6 +49,7 @@ dependencies {
     testAnnotationProcessor("org.projectlombok:lombok")
     testRuntimeOnly("com.h2database:h2")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("com.github.codemonstur:embedded-redis:1.4.3")
 }
 
 tasks.test {
