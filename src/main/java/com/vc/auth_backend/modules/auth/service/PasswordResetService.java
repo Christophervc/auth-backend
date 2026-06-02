@@ -36,7 +36,7 @@ public class PasswordResetService {
     @Value("${app.otp.expiration-minutes}")
     private int otpExpirationMinutes;
 
-    @Transactional
+    @Transactional(readOnly = true)
     public void requestPasswordReset(ForgotPasswordRequest request) {
         Optional<User> userOpt = userRepository.findByEmail(request.email());
         if (userOpt.isEmpty()) {
@@ -60,7 +60,6 @@ public class PasswordResetService {
         log.info("Password reset OTP sent to userId={}", user.getId());
     }
 
-    @Transactional(readOnly = true)
     public void verifyOtp(VerifyOtpRequest request) {
         User user = findActiveLocalUserByEmail(request.email());
         validateOtp(user.getId(), request.code());

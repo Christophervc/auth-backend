@@ -19,7 +19,7 @@ public class OtpRedisRepository {
     @Value("${app.otp.expiration-minutes}")
     private int expirationMinutes;
 
-    private static final String KEY_PREFIX = "otp:password_reset";
+    private static final String KEY_PREFIX = "otp:password_reset:";
 
     // Escritura
     public void save(UUID userId, String codeHash) {
