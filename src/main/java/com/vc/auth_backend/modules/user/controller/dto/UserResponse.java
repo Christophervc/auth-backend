@@ -17,6 +17,7 @@ public record UserResponse(
         boolean active,
         LocalDateTime joinedAt,
         String avatar,
-        String provider
+        String provider,
+        boolean twoFactorEnabled
 ) {
 }

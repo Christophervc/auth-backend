@@ -159,7 +159,8 @@ public class UserServiceImpl implements UserService {
                 user.isActive(),
                 user.getJoinedAt(),
                 user.getAvatar(),
-                user.getProvider()
+                user.getProvider(),
+                user.isTwoFactorEnabled()
         );
     }
 
