@@ -1,0 +1,141 @@
+package com.vc.auth_backend.modules.auth.service;
+
+import com.vc.auth_backend.modules.auth.dto.AuthResponse;
+import com.vc.auth_backend.modules.auth.dto.ConfirmSetupResponse;
+import com.vc.auth_backend.modules.auth.dto.SetupResponse;
+import com.vc.auth_backend.modules.auth.jwt.JwtService;
+import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
+import com.vc.auth_backend.modules.user.entity.User;
+import com.vc.auth_backend.modules.user.repository.UserRepository;
+import com.vc.auth_backend.shared.exception.InvalidExceptionToken;
+import com.vc.auth_backend.shared.exception.InvalidOtpException;
+import dev.samstevens.totp.qr.QrData;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Base64;
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class TwoFactorService {
+    private final UserRepository userRepository;
+    private final TotpService totpService;
+    private final BackupCodeService backupCodeService;
+    private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
+
+    @Transactional
+    public SetupResponse setup(UUID userId) {
+        User user = getUser(userId);
+        if (user.isTwoFactorEnabled()) {
+            throw new IllegalStateException("2FA is already enabled");
+        }
+
+        String secret = totpService.generateSecret();
+        // Guardamos el secreto pero NO habilitamos 2FA aún
+        user.setTwoFactorSecret(secret);
+        userRepository.save(user);
+
+        QrData qrData = totpService.generateQrData(user.getEmail(), secret);
+        byte[] qrPng = totpService.generateQrPng(qrData);
+        String base64Image = "data:image/png;base64," + Base64.getEncoder().encodeToString(qrPng);
+
+        return new SetupResponse(secret, qrData.getUri(), base64Image);
+    }
+
+    @Transactional
+    public ConfirmSetupResponse confirmSetup(UUID userId, String code) {
+        User user = getUser(userId);
+        if (user.isTwoFactorEnabled()) {
+            throw new IllegalStateException("2FA is already enabled");
+        }
+        if (user.getTwoFactorSecret() == null) {
+            throw new IllegalStateException("No pending 2FA setup found. Call /setup first.");
+        }
+
+        if (!totpService.verifyCode(user.getTwoFactorSecret(), code)) {
+            throw new InvalidOtpException("Invalid TOTP code");
+        }
+
+        BackupCodeService.BackupCodePair codes = backupCodeService.generateBackupCodes();
+        user.setTwoFactorEnabled(true);
+        user.setBackupCodesJson(backupCodeService.serialize(codes.hashed()));
+        userRepository.save(user);
+
+        // Retornamos los códigos planos por única vez
+        return new ConfirmSetupResponse(codes.plain());
+    }
+
+    @Transactional
+    public AuthResponse verifyLogin(String preAuthToken, String code, HttpServletRequest httpRequest) {
+        if (preAuthToken == null || !jwtService.isPreAuthToken(preAuthToken)) {
+            throw new InvalidExceptionToken("Invalid or missing pre-auth token");
+        }
+
+        String email = jwtService.extractUsername(preAuthToken);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        if (!user.isTwoFactorEnabled()) {
+            throw new IllegalStateException("2FA is not enabled for this user");
+        }
+
+        // 1. Intentar validar como TOTP
+        boolean isValidTotp = totpService.verifyCode(user.getTwoFactorSecret(), code);
+
+        // 2. Si falla, intentar como Backup Code
+        boolean isValidBackup = false;
+        if (!isValidTotp) {
+            isValidBackup = backupCodeService.consumeBackupCode(user, code);
+        }
+
+        if (!isValidTotp && !isValidBackup) {
+            throw new InvalidOtpException("Invalid 2FA code");
+        }
+
+        if (isValidBackup) {
+            userRepository.save(user); // Guarda la nueva lista mutilada de backup codes
+        }
+
+        // 3. Emitir tokens finales
+        CustomUserPrincipal principal = new CustomUserPrincipal(user);
+        String accessToken = jwtService.generateToken(principal);
+        String refreshToken = refreshTokenService.createRefreshToken(user.getId(), httpRequest).getToken();
+
+        return AuthResponse.builder()
+                .token(accessToken)
+                .refreshToken(refreshToken)
+                .requiresTwoFactor(false)
+                .message("Login successfully completed")
+                .build();
+    }
+
+    @Transactional
+    public void disable(UUID userId, String code) {
+        User user = getUser(userId);
+        if (!user.isTwoFactorEnabled()) {
+            throw new IllegalStateException("2FA is not enabled");
+        }
+        if (!totpService.verifyCode(user.getTwoFactorSecret(), code)) {
+            throw new InvalidOtpException("Invalid TOTP code");
+        }
+
+        user.setTwoFactorEnabled(false);
+        user.setTwoFactorSecret(null);
+        user.setBackupCodesJson(null);
+        userRepository.save(user);
+        // revocar sesiones activas para obligar a iniciar sesión normal
+        refreshTokenService.logoutAll(user.getId());
+    }
+
+    private User getUser(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+    }
+}
