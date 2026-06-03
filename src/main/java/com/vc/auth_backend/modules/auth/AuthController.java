@@ -37,16 +37,21 @@ public class AuthController {
 
     @Operation(
             summary = "Iniciar sesion",
-            description = "Autentica al usuario con credenciales y escribe las cookies http-only de acceso y refresh."+
-                        "Registra el dispositivo (browser, OS) para la lista de sesiones.")
+            description = "Autentica al usuario con credenciales y escribe las cookies http-only de acceso y refresh." +
+                    "Registra el dispositivo (browser, OS) para la lista de sesiones." +
+                    "Si tiene 2FA activo, retorna un estado pre-auth y escribe cookie temporal.")
     @PostMapping("/login")
-    public ResponseEntity<MessageResponse> login(
+    public ResponseEntity<AuthResponse> login(
             @Valid @RequestBody LoginRequest request,
             @Parameter(hidden = true) HttpServletRequest httpRequest,
             @Parameter(hidden = true) HttpServletResponse httpResponse) {
         AuthResponse authResponse = authenticationService.authenticate(request, httpRequest);
-        cookieService.addAuthCookies(httpResponse, authResponse);
-        return ResponseEntity.ok(new MessageResponse("Login successfully"));
+        if (Boolean.TRUE.equals(authResponse.requiresTwoFactor())) {
+            cookieService.addPreAuthCookie(httpResponse, authResponse.preAuthToken());
+        } else {
+            cookieService.addAuthCookies(httpResponse, authResponse);
+        }
+        return ResponseEntity.ok(authResponse);
     }
 
     @Operation(

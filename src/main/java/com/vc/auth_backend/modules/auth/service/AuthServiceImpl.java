@@ -36,6 +36,18 @@ public class AuthServiceImpl implements AuthenticationService {
                 new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
         CustomUserPrincipal userDetails = (CustomUserPrincipal) authentication.getPrincipal();
+
+        assert userDetails != null;
+        if (userDetails.user().isTwoFactorEnabled()) {
+            String preAuthToken = jwtService.generatePreAuthToken(userDetails);
+
+            return AuthResponse.builder()
+                    .requiresTwoFactor(true)
+                    .preAuthToken(preAuthToken)
+                    .message("Two-factor authentication required")
+                    .build();
+        }
+
         String accessToken = jwtService.generateToken(userDetails);
         String refreshToken = refreshTokenService
                 .createRefreshToken(userDetails.getId(), httpRequest).getToken();
