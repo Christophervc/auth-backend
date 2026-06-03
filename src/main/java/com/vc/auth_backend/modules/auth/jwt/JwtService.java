@@ -30,6 +30,9 @@ public class JwtService {
     @Value("${jwt.time.refresh-expiration}")
     private long refreshExpiration;
 
+    @Value("${app.2fa.pre-auth-expiration}")
+    private long preAuthExpiration;
+
     private SecretKey signingKey;
 
     @PostConstruct
@@ -49,6 +52,21 @@ public class JwtService {
 
     public String generateRefreshToken(UserDetails userDetails){
         return buildToken(new HashMap<>(), userDetails, refreshExpiration);
+    }
+
+    public String generatePreAuthToken(UserDetails userDetails) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("type", "pre_auth"); // claim discriminador
+        return buildToken(claims, userDetails, preAuthExpiration);
+    }
+
+    public boolean isPreAuthToken(String token) {
+        try {
+            String type = extractClaims(token, claims -> claims.get("type", String.class));
+            return "pre_auth".equals(type);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private String buildToken(Map<String, Object> extraClaims, UserDetails userDetails, long expiration) {

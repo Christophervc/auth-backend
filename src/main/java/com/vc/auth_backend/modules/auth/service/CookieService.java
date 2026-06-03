@@ -38,6 +38,8 @@ public class CookieService {
     private static final String ACCESS_TOKEN_COOKIE  = "access_token";
     private static final String REFRESH_TOKEN_COOKIE = "refresh_token";
 
+    private static final String PRE_AUTH_TOKEN_COOKIE = "pre_auth_token";
+
     // Write
     public void addAuthCookies(HttpServletResponse response, AuthResponse authResponse) {
         addCookie(response, ACCESS_TOKEN_COOKIE, authResponse.token(), accessMaxAge());
@@ -49,6 +51,14 @@ public class CookieService {
         addCookie(response, REFRESH_TOKEN_COOKIE, "", 0);
     }
 
+    public void addPreAuthCookie(HttpServletResponse response, String token) {
+        addCookie(response, PRE_AUTH_TOKEN_COOKIE, token, 5 * 60);
+    }
+
+    public void clearPreAuthCookie(HttpServletResponse response) {
+        addCookie(response, PRE_AUTH_TOKEN_COOKIE, "", 0);
+    }
+
     // Read
     public Optional<String> getAccessToken(HttpServletRequest request) {
         return extractCookie(request, ACCESS_TOKEN_COOKIE);
@@ -56,6 +66,10 @@ public class CookieService {
 
     public Optional<String> getRefreshToken(HttpServletRequest request) {
         return extractCookie(request, REFRESH_TOKEN_COOKIE);
+    }
+
+    public Optional<String> getPreAuthToken(HttpServletRequest request) {
+        return extractCookie(request, PRE_AUTH_TOKEN_COOKIE);
     }
 
     private void addCookie(HttpServletResponse response,
