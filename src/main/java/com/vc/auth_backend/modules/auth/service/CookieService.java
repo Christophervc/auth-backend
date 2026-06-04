@@ -42,21 +42,21 @@ public class CookieService {
 
     // Write
     public void addAuthCookies(HttpServletResponse response, AuthResponse authResponse) {
-        addCookie(response, ACCESS_TOKEN_COOKIE, authResponse.token(), accessMaxAge());
-        addCookie(response, REFRESH_TOKEN_COOKIE, authResponse.refreshToken(), refreshMaxAge());
+        addCookie(response, ACCESS_TOKEN_COOKIE, authResponse.token(), accessMaxAge(),"/");
+        addCookie(response, REFRESH_TOKEN_COOKIE, authResponse.refreshToken(), refreshMaxAge(),"/");
     }
 
     public void clearAuthCookies(HttpServletResponse response) {
-        addCookie(response, ACCESS_TOKEN_COOKIE, "", 0);
-        addCookie(response, REFRESH_TOKEN_COOKIE, "", 0);
+        addCookie(response, ACCESS_TOKEN_COOKIE, "", 0,"/");
+        addCookie(response, REFRESH_TOKEN_COOKIE, "", 0,"/");
     }
 
     public void addPreAuthCookie(HttpServletResponse response, String token) {
-        addCookie(response, PRE_AUTH_TOKEN_COOKIE, token, 5 * 60);
+        addCookie(response, PRE_AUTH_TOKEN_COOKIE, token, 5 * 60, "/api/v1/auth/2fa/verify");
     }
 
     public void clearPreAuthCookie(HttpServletResponse response) {
-        addCookie(response, PRE_AUTH_TOKEN_COOKIE, "", 0);
+        addCookie(response, PRE_AUTH_TOKEN_COOKIE, "", 0, "/api/v1/auth/2fa/verify");
     }
 
     // Read
@@ -72,15 +72,13 @@ public class CookieService {
         return extractCookie(request, PRE_AUTH_TOKEN_COOKIE);
     }
 
-    private void addCookie(HttpServletResponse response,
-                           String name,
-                           String value,
-                           int maxAge) {
+    private void addCookie(HttpServletResponse response, String name, String value,
+                           int maxAge, String path) {
         ResponseCookie cookie = ResponseCookie.from(name, value)
                 .httpOnly(true)
                 .secure(secure)
                 .sameSite(sameSite)
-                .path("/")
+                .path(path)
                 .maxAge(maxAge)
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());

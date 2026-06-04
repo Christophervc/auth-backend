@@ -83,11 +83,9 @@ public class SecurityConfig {
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class).oauth2Login(oauth2 -> oauth2
+                .oauth2Login(oauth2 -> oauth2
                         .authorizationEndpoint(authEndpoint ->
                                 // Aquí registramos nuestro repositorio de cookies para guardar
                                 // el OAuth2AuthorizationRequest de forma stateless
@@ -100,7 +98,10 @@ public class SecurityConfig {
                         )
                         .successHandler(oauth2SuccessHandler)
                         .failureHandler(oauth2FailureHandler)
-                );
+                )
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 
