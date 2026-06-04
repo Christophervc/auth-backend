@@ -45,12 +45,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 filterChain.doFilter(request, response);
                 return;
             }
-            // Guard para rechazar pre-auth tokens como access tokens válidos
-            if (jwtService.isPreAuthToken(token)) {
-                log.debug("Pre-auth token detected in Authorization header/cookie. Ignoring for standard authentication.");
-                filterChain.doFilter(request, response);
-                return;
-            }
 
             final String userEmail = jwtService.extractUsername(token);
 

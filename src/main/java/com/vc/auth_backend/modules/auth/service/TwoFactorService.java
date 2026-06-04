@@ -4,6 +4,7 @@ import com.vc.auth_backend.modules.auth.dto.AuthResponse;
 import com.vc.auth_backend.modules.auth.dto.ConfirmSetupResponse;
 import com.vc.auth_backend.modules.auth.dto.SetupResponse;
 import com.vc.auth_backend.modules.auth.jwt.JwtService;
+import com.vc.auth_backend.modules.auth.repository.PreAuthRedisRepository;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.user.entity.User;
 import com.vc.auth_backend.modules.user.repository.UserRepository;
@@ -27,8 +28,9 @@ public class TwoFactorService {
     private final UserRepository userRepository;
     private final TotpService totpService;
     private final BackupCodeService backupCodeService;
-    private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
+    private final PreAuthRedisRepository  preAuthRedisRepository;
+    private final JwtService jwtService;
 
     @Transactional
     public SetupResponse setup(UUID userId) {
@@ -74,11 +76,13 @@ public class TwoFactorService {
 
     @Transactional
     public AuthResponse verifyLogin(String preAuthToken, String code, HttpServletRequest httpRequest) {
-        if (preAuthToken == null || !jwtService.isPreAuthToken(preAuthToken)) {
+        if (preAuthToken == null || preAuthToken.isBlank()) {
             throw new InvalidExceptionToken("Invalid or missing pre-auth token");
         }
 
-        String email = jwtService.extractUsername(preAuthToken);
+        String email = preAuthRedisRepository.findEmailByToken(preAuthToken)
+                .orElseThrow(()-> new InvalidExceptionToken("Invalid or expired pre-auth token"));
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
@@ -100,8 +104,10 @@ public class TwoFactorService {
         }
 
         if (isValidBackup) {
-            userRepository.save(user); // Guarda la nueva lista mutilada de backup codes
+            userRepository.save(user); // Guarda la nueva lista de backup codes
         }
+
+        preAuthRedisRepository.delete(preAuthToken);
 
         // 3. Emitir tokens finales
         CustomUserPrincipal principal = new CustomUserPrincipal(user);
