@@ -5,6 +5,7 @@ import com.vc.auth_backend.modules.auth.dto.ConfirmSetupResponse;
 import com.vc.auth_backend.modules.auth.dto.SetupResponse;
 import com.vc.auth_backend.modules.auth.jwt.JwtService;
 import com.vc.auth_backend.modules.auth.repository.PreAuthRedisRepository;
+import com.vc.auth_backend.modules.auth.repository.UsedTotpCodeRedisRepository;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.user.entity.User;
 import com.vc.auth_backend.modules.user.repository.UserRepository;
@@ -31,6 +32,7 @@ public class TwoFactorService {
     private final RefreshTokenService refreshTokenService;
     private final PreAuthRedisRepository  preAuthRedisRepository;
     private final JwtService jwtService;
+    private final UsedTotpCodeRedisRepository usedTotpCodeRedisRepository;
 
     @Transactional
     public SetupResponse setup(UUID userId) {
@@ -65,6 +67,11 @@ public class TwoFactorService {
             throw new InvalidOtpException("Invalid TOTP code");
         }
 
+        // Anti-replay: evita que el mismo código active el 2FA dos veces en rápida sucesión
+        if (!usedTotpCodeRedisRepository.markAsUsedIfNew(userId, code, totpService.getPeriod())) {
+            throw new InvalidOtpException("Code already used. Please wait for a new code.");
+        }
+
         BackupCodeService.BackupCodePair codes = backupCodeService.generateBackupCodes();
         user.setTwoFactorEnabled(true);
         user.setBackupCodesJson(backupCodeService.serialize(codes.hashed()));
@@ -81,7 +88,7 @@ public class TwoFactorService {
         }
 
         String email = preAuthRedisRepository.findEmailByToken(preAuthToken)
-                .orElseThrow(()-> new InvalidExceptionToken("Invalid or expired pre-auth token"));
+                .orElseThrow(()->new InvalidExceptionToken("Invalid or expired pre-auth token"));
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -93,7 +100,18 @@ public class TwoFactorService {
         // 1. Intentar validar como TOTP
         boolean isValidTotp = totpService.verifyCode(user.getTwoFactorSecret(), code);
 
-        // 2. Si falla, intentar como Backup Code
+        // 2. Anti-replay: si el código TOTP es válido, verificar que no haya sido usado antes.
+        //    Se hace ANTES de destruir el preAuthToken para no consumirlo en un replay.
+        if (isValidTotp) {
+            boolean isFirstUse = usedTotpCodeRedisRepository
+                    .markAsUsedIfNew(user.getId(), code, totpService.getPeriod());
+            if (!isFirstUse) {
+                // El código es matemáticamente válido, pero ya fue usado: replay detectado.
+                throw new InvalidOtpException("Code already used. Please wait for a new code from your authenticator app.");
+            }
+        }
+
+        // 3. Si falla TOTP, intentar como Backup Code (ya consume el código en BD: sin replay posible)
         boolean isValidBackup = false;
         if (!isValidTotp) {
             isValidBackup = backupCodeService.consumeBackupCode(user, code);
@@ -109,7 +127,7 @@ public class TwoFactorService {
 
         preAuthRedisRepository.delete(preAuthToken);
 
-        // 3. Emitir tokens finales
+        // 4. Emitir tokens finales
         CustomUserPrincipal principal = new CustomUserPrincipal(user);
         String accessToken = jwtService.generateToken(principal);
         String refreshToken = refreshTokenService.createRefreshToken(user.getId(), httpRequest).getToken();

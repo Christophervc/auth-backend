@@ -58,8 +58,18 @@ public class TotpService {
     public boolean verifyCode(String secret, String code) {
         TimeProvider timeProvider = new SystemTimeProvider();
         CodeGenerator codeGenerator = new DefaultCodeGenerator();
-        // Permite un pequeño margen de tiempo por si los relojes están desincronizados
-        CodeVerifier verifier = new DefaultCodeVerifier(codeGenerator, timeProvider);
+        DefaultCodeVerifier verifier = new DefaultCodeVerifier(codeGenerator, timeProvider);
+        // Tolerancia ±1 período (90s en total): cubre desincronización de reloj razonable.
+        // El anti-replay en Redis se encarga de que cada código solo se use una vez.
+        verifier.setAllowedTimePeriodDiscrepancy(1);
         return verifier.isValidCode(secret, code);
+    }
+
+    /**
+     * Devuelve el período TOTP configurado (en segundos).
+     * Usado por el repositorio anti-replay para calcular el TTL de los códigos usados.
+     */
+    public int getPeriod() {
+        return period;
     }
 }
