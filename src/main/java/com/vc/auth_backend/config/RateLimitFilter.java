@@ -38,12 +38,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        boolean isAuthRequest = requestUri.startsWith("/api/v1/auth/login") || requestUri.startsWith("/api/v1/auth/register");
-
+        String bucketType = resolveBucketType(requestUri);
         String clientId = resolveClientId(request);
-        String bucketKey = (isAuthRequest ? "AUTH:" : "GEN:") + clientId;
 
-        Bucket bucket = rateLimitingService.resolveBucket(bucketKey, isAuthRequest);
+        Bucket bucket = rateLimitingService.resolveBucket(bucketType, clientId);
 
         if (bucket.tryConsume(1)) {
             filterChain.doFilter(request, response);
@@ -59,6 +57,22 @@ public class RateLimitFilter extends OncePerRequestFilter {
         problemDetail.setTitle("Rate Limit Exceeded");
         jsonMapper.writeValue(response.getWriter(), problemDetail);
         response.getWriter().flush();
+    }
+
+    private String resolveBucketType(String uri) {
+        if (uri.startsWith("/api/v1/auth/2fa/")) {
+            return "TOTP";
+        }
+        if (uri.startsWith("/api/v1/auth/forgot-password") ||
+            uri.startsWith("/api/v1/auth/verify-otp") ||
+            uri.startsWith("/api/v1/auth/reset-password")) {
+            return "OTP";
+        }
+        if (uri.startsWith("/api/v1/auth/login") ||
+            uri.startsWith("/api/v1/auth/register")) {
+            return "AUTH";
+        }
+        return "GEN";
     }
 
     private String resolveClientId(HttpServletRequest request) {

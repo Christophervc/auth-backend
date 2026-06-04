@@ -21,7 +21,6 @@ public class RateLimitingService {
             .refillGreedy(90, Duration.ofMinutes(1))
             .build();
 
-
     private final Bandwidth authLimit = Bandwidth.builder()
             .capacity(10)
             .refillIntervally(10, Duration.ofMinutes(1))
@@ -32,18 +31,29 @@ public class RateLimitingService {
             .refillIntervally(3, Duration.ofHours(1))
             .build();
 
-    public Bucket resolveBucket(String key, boolean isAuthRequest, boolean isOtpRequest) {
-        return cache.get(key, k -> buildBucket(isAuthRequest, isOtpRequest));
+    private final Bandwidth totpLimit = Bandwidth.builder()
+            .capacity(5)
+            .refillIntervally(5, Duration.ofMinutes(15))
+            .build();
+
+    /**
+     * Resuelve un bucket de rate limiting basado en el tipo y el identificador del cliente.
+     * @param type El tipo de bucket (TOTP, AUTH, OTP, GEN)
+     * @param clientId El ID del usuario o la IP
+     * @return El bucket correspondiente
+     */
+    public Bucket resolveBucket(String type, String clientId) {
+        String key = type + ":" + clientId;
+        return cache.get(key, k -> createBucket(type));
     }
 
-    public Bucket resolveBucket(String key, boolean isAuthRequest) {
-        return resolveBucket(key, isAuthRequest, false);
-    }
-
-    private Bucket buildBucket(boolean isAuthRequest,  boolean isOtpRequest) {
-        Bandwidth limit =  isOtpRequest  ? otpLimit
-                : isAuthRequest ? authLimit
-                : generalLimit;
+    private Bucket createBucket(String type) {
+        Bandwidth limit = switch (type) {
+            case "TOTP" -> totpLimit;
+            case "AUTH" -> authLimit;
+            case "OTP"  -> otpLimit;
+            default     -> generalLimit;
+        };
         return Bucket.builder().addLimit(limit).build();
     }
 }
