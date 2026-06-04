@@ -17,7 +17,7 @@ public class PreAuthRedisRepository {
 
     private static final String KEY_PREFIX = "2fa:preauth:";
 
-    @Value("${app.2fa.pre-auth-expiration}")
+    @Value("${app.2fa.pre-auth-expiration-minutes:5}")
     private int preAuthExpirationMinutes;
 
     public void save(String token, String email){

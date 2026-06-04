@@ -42,3 +42,6 @@ out/
 application-dev.properties
 application-local.properties
 application-prod.properties
+
+.antigravitycli/
+.claude/

@@ -1,7 +1,10 @@
-package com.vc.auth_backend.modules.auth;
+package com.vc.auth_backend.modules.auth.controller;
 
 import com.vc.auth_backend.config.OpenApiConfig;
-import com.vc.auth_backend.modules.auth.dto.*;
+import com.vc.auth_backend.modules.auth.dto.request.*;
+import com.vc.auth_backend.modules.auth.dto.response.AuthResponse;
+import com.vc.auth_backend.modules.auth.dto.response.LoginResponse;
+import com.vc.auth_backend.modules.auth.dto.response.SessionResponse;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.auth.service.AuthenticationService;
 import com.vc.auth_backend.modules.auth.service.CookieService;
@@ -36,22 +39,22 @@ public class AuthController {
     private final PasswordResetService passwordResetService;
 
     @Operation(
-            summary = "Iniciar sesion",
+            summary = "Iniciar sesión",
             description = "Autentica al usuario con credenciales y escribe las cookies http-only de acceso y refresh." +
                     "Registra el dispositivo (browser, OS) para la lista de sesiones." +
                     "Si tiene 2FA activo, retorna un estado pre-auth y escribe cookie temporal.")
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(
+    public ResponseEntity<LoginResponse> login(
             @Valid @RequestBody LoginRequest request,
             @Parameter(hidden = true) HttpServletRequest httpRequest,
             @Parameter(hidden = true) HttpServletResponse httpResponse) {
-        AuthResponse authResponse = authenticationService.authenticate(request, httpRequest);
-        if (Boolean.TRUE.equals(authResponse.requiresTwoFactor())) {
-            cookieService.addPreAuthCookie(httpResponse, authResponse.preAuthToken());
-        } else {
-            cookieService.addAuthCookies(httpResponse, authResponse);
+        AuthResponse internal = authenticationService.authenticate(request, httpRequest);
+        if (Boolean.TRUE.equals(internal.requiresTwoFactor())) {
+            cookieService.addPreAuthCookie(httpResponse, internal.preAuthToken());
+            return ResponseEntity.ok(LoginResponse.twoFactorRequired(internal.message()));
         }
-        return ResponseEntity.ok(authResponse);
+        cookieService.addAuthCookies(httpResponse, internal);
+        return ResponseEntity.ok(LoginResponse.of(internal.message()));
     }
 
     @Operation(

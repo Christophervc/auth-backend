@@ -1,4 +1,4 @@
-package com.vc.auth_backend.modules.auth.dto;
+package com.vc.auth_backend.modules.auth.dto.response;
 
 import com.vc.auth_backend.modules.auth.entity.DeviceType;
 

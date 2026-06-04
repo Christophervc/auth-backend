@@ -1,10 +1,10 @@
-package com.vc.auth_backend.modules.auth;
+package com.vc.auth_backend.modules.auth.controller;
 
 import com.vc.auth_backend.config.OpenApiConfig;
-import com.vc.auth_backend.modules.auth.dto.AuthResponse;
-import com.vc.auth_backend.modules.auth.dto.ConfirmSetupResponse;
-import com.vc.auth_backend.modules.auth.dto.SetupResponse;
-import com.vc.auth_backend.modules.auth.dto.TwoFactorCodeRequest;
+import com.vc.auth_backend.modules.auth.dto.response.AuthResponse;
+import com.vc.auth_backend.modules.auth.dto.response.ConfirmSetupResponse;
+import com.vc.auth_backend.modules.auth.dto.response.SetupResponse;
+import com.vc.auth_backend.modules.auth.dto.request.TwoFactorCodeRequest;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.auth.service.CookieService;
 import com.vc.auth_backend.modules.auth.service.TwoFactorService;
@@ -46,18 +46,23 @@ public class TwoFactorController {
         return ResponseEntity.ok(twoFactorService.confirmSetup(currentUser.getId(), request.code()));
     }
 
-    @Operation(summary = "Completar Login 2FA", description = "Recibe el código TOTP y el pre-auth token (por cookie) para emitir los tokens finales.")
+    @Operation(summary = "Completar Login 2FA", description = """
+                    Recibe el código TOTP y lee el pre_auth_token desde la cookie http-only.
+                    Si el código es válido, emite las cookies de sesión (access_token, refresh_token)
+                    y limpia la cookie pre_auth_token.
+                    El body de respuesta nunca contiene tokens — viajan exclusivamente en cookies.
+                    """)
     @PostMapping("/verify")
-    public ResponseEntity<AuthResponse> verifyLogin(
+    public ResponseEntity<MessageResponse> verifyLogin(
             @Valid @RequestBody TwoFactorCodeRequest request,
             @Parameter(hidden = true) HttpServletRequest httpRequest,
             @Parameter(hidden = true) HttpServletResponse httpResponse) {
         String preAuthToken = cookieService.getPreAuthToken(httpRequest)
                 .orElseThrow(() -> new IllegalArgumentException("Pre-auth token is missing. Please login first."));
-        AuthResponse authResponse = twoFactorService.verifyLogin(preAuthToken, request.code(), httpRequest);
+        AuthResponse internal = twoFactorService.verifyLogin(preAuthToken, request.code(), httpRequest);
         cookieService.clearPreAuthCookie(httpResponse);
-        cookieService.addAuthCookies(httpResponse, authResponse);
-        return ResponseEntity.ok(authResponse);
+        cookieService.addAuthCookies(httpResponse, internal);
+        return ResponseEntity.ok(new MessageResponse(internal.message()));
     }
 
     @Operation(summary = "Desactivar 2FA", description = "Desactiva 2FA validando un código actual. Requiere estar autenticado.",

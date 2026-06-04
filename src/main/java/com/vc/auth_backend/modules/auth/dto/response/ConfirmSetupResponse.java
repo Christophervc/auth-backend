@@ -1,4 +1,4 @@
-package com.vc.auth_backend.modules.auth.dto;
+package com.vc.auth_backend.modules.auth.dto.response;
 
 import java.util.List;
 
