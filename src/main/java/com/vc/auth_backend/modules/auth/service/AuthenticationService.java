@@ -1,9 +1,9 @@
 package com.vc.auth_backend.modules.auth.service;
 
-import com.vc.auth_backend.modules.auth.dto.response.AuthResponse;
-import com.vc.auth_backend.modules.auth.dto.request.LoginRequest;
-import com.vc.auth_backend.modules.auth.dto.request.RefreshTokenRequest;
-import com.vc.auth_backend.modules.auth.dto.request.RegisterRequest;
+import com.vc.auth_backend.modules.auth.controller.dto.response.AuthResponse;
+import com.vc.auth_backend.modules.auth.controller.dto.request.LoginRequest;
+import com.vc.auth_backend.modules.auth.controller.dto.request.RefreshTokenRequest;
+import com.vc.auth_backend.modules.auth.controller.dto.request.RegisterRequest;
 import jakarta.servlet.http.HttpServletRequest;
 
 public interface AuthenticationService {

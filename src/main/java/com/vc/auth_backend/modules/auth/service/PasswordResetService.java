@@ -1,8 +1,8 @@
 package com.vc.auth_backend.modules.auth.service;
 
-import com.vc.auth_backend.modules.auth.dto.request.ForgotPasswordRequest;
-import com.vc.auth_backend.modules.auth.dto.request.ResetPasswordRequest;
-import com.vc.auth_backend.modules.auth.dto.request.VerifyOtpRequest;
+import com.vc.auth_backend.modules.auth.controller.dto.request.ForgotPasswordRequest;
+import com.vc.auth_backend.modules.auth.controller.dto.request.ResetPasswordRequest;
+import com.vc.auth_backend.modules.auth.controller.dto.request.VerifyOtpRequest;
 import com.vc.auth_backend.modules.auth.repository.OtpRedisRepository;
 import com.vc.auth_backend.modules.email.EmailProvider;
 import com.vc.auth_backend.modules.email.template.OtpEmailTemplate;

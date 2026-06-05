@@ -1,8 +1,8 @@
 package com.vc.auth_backend.modules.auth.service;
 
-import com.vc.auth_backend.modules.auth.dto.response.AuthResponse;
-import com.vc.auth_backend.modules.auth.dto.response.ConfirmSetupResponse;
-import com.vc.auth_backend.modules.auth.dto.response.SetupResponse;
+import com.vc.auth_backend.modules.auth.controller.dto.response.AuthResponse;
+import com.vc.auth_backend.modules.auth.controller.dto.response.ConfirmSetupResponse;
+import com.vc.auth_backend.modules.auth.controller.dto.response.SetupResponse;
 import com.vc.auth_backend.modules.auth.jwt.JwtService;
 import com.vc.auth_backend.modules.auth.repository.PreAuthRedisRepository;
 import com.vc.auth_backend.modules.auth.repository.UsedTotpCodeRedisRepository;

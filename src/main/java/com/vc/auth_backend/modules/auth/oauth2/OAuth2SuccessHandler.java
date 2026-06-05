@@ -1,6 +1,6 @@
 package com.vc.auth_backend.modules.auth.oauth2;
 
-import com.vc.auth_backend.modules.auth.dto.response.AuthResponse;
+import com.vc.auth_backend.modules.auth.controller.dto.response.AuthResponse;
 import com.vc.auth_backend.modules.auth.jwt.JwtService;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.auth.service.CookieService;

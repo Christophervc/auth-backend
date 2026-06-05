@@ -1,10 +1,10 @@
 package com.vc.auth_backend.modules.auth.controller;
 
 import com.vc.auth_backend.config.OpenApiConfig;
-import com.vc.auth_backend.modules.auth.dto.request.*;
-import com.vc.auth_backend.modules.auth.dto.response.AuthResponse;
-import com.vc.auth_backend.modules.auth.dto.response.LoginResponse;
-import com.vc.auth_backend.modules.auth.dto.response.SessionResponse;
+import com.vc.auth_backend.modules.auth.controller.dto.request.*;
+import com.vc.auth_backend.modules.auth.controller.dto.response.AuthResponse;
+import com.vc.auth_backend.modules.auth.controller.dto.response.LoginResponse;
+import com.vc.auth_backend.modules.auth.controller.dto.response.SessionResponse;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.auth.service.AuthenticationService;
 import com.vc.auth_backend.modules.auth.service.CookieService;

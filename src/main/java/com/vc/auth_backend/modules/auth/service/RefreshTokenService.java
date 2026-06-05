@@ -1,6 +1,6 @@
 package com.vc.auth_backend.modules.auth.service;
 
-import com.vc.auth_backend.modules.auth.dto.response.SessionResponse;
+import com.vc.auth_backend.modules.auth.controller.dto.response.SessionResponse;
 import com.vc.auth_backend.modules.auth.repository.RefreshTokenRepository;
 import com.vc.auth_backend.modules.auth.entity.RefreshToken;
 import com.vc.auth_backend.modules.auth.jwt.JwtService;

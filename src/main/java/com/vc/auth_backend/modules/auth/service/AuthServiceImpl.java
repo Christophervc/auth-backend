@@ -1,9 +1,9 @@
 package com.vc.auth_backend.modules.auth.service;
 
-import com.vc.auth_backend.modules.auth.dto.response.AuthResponse;
-import com.vc.auth_backend.modules.auth.dto.request.LoginRequest;
-import com.vc.auth_backend.modules.auth.dto.request.RefreshTokenRequest;
-import com.vc.auth_backend.modules.auth.dto.request.RegisterRequest;
+import com.vc.auth_backend.modules.auth.controller.dto.response.AuthResponse;
+import com.vc.auth_backend.modules.auth.controller.dto.request.LoginRequest;
+import com.vc.auth_backend.modules.auth.controller.dto.request.RefreshTokenRequest;
+import com.vc.auth_backend.modules.auth.controller.dto.request.RegisterRequest;
 import com.vc.auth_backend.modules.auth.entity.RefreshToken;
 import com.vc.auth_backend.modules.auth.jwt.JwtService;
 import com.vc.auth_backend.modules.auth.repository.PreAuthRedisRepository;
@@ -22,6 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -41,8 +42,7 @@ public class AuthServiceImpl implements AuthenticationService {
 
         CustomUserPrincipal userDetails = (CustomUserPrincipal) authentication.getPrincipal();
 
-        assert userDetails != null;
-        if (userDetails.user().isTwoFactorEnabled()) {
+        if (Objects.requireNonNull(userDetails).user().isTwoFactorEnabled()) {
             String preAuthToken = UUID.randomUUID().toString();
             preAuthRedisRepository.save(preAuthToken, userDetails.getUsername());
 
