@@ -86,7 +86,7 @@ public class User {
     @Convert(converter = AesEncryptedStringConverter.class)
     private String twoFactorSecret;
 
-    @Column(name = "backup_codes", columnDefinition = "TEXT")
+    @Column(name = "backup_codes_json", columnDefinition = "TEXT")
     @Convert(converter = AesEncryptedStringConverter.class)
     private String backupCodesJson; // JSON array de hashes BCrypt
 
