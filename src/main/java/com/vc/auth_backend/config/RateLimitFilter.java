@@ -9,6 +9,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -18,10 +19,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
+
+    private static final Pattern VALID_IP = Pattern.compile(
+            "^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$" + // IPv4
+            "|^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$"                                    // IPv6
+    );
     private final RateLimitingService rateLimitingService;
     private final JsonMapper jsonMapper;
 
@@ -84,10 +92,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String extractClientIp(HttpServletRequest request) {
-        if (request == null) return null;
         String forwarded = request.getHeader("X-Forwarded-For");
         if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
+            String candidate = forwarded.split(",")[0].strip();
+            if (VALID_IP.matcher(candidate).matches()) {
+                return candidate;
+            }
+            log.warn("X-Forwarded-For con valor inválido ignorado: '{}'", candidate);
         }
         return request.getRemoteAddr();
     }
