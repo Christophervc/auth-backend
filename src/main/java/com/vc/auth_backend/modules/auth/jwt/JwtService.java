@@ -1,5 +1,6 @@
 package com.vc.auth_backend.modules.auth.jwt;
 
+import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -32,22 +33,32 @@ public class JwtService {
 
     private SecretKey signingKey;
 
+    // Nombres de claims custom embebidos en el access token
+    static final String CLAIM_ROLE   = "role";
+    static final String CLAIM_ACTIVE = "active";
+    static final String CLAIM_UID    = "uid";
+
     @PostConstruct
     private void initSigningKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String generateToken(UserDetails userDetails){
+    public String generateToken(UserDetails userDetails) {
         Map<String, Object> extraClaims = new HashMap<>();
         var authorities = userDetails.getAuthorities();
         if (authorities != null && !authorities.isEmpty()) {
-            extraClaims.put("role", userDetails.getAuthorities().iterator().next().getAuthority());
+            extraClaims.put(CLAIM_ROLE, authorities.iterator().next().getAuthority());
+        }
+
+        if (userDetails instanceof CustomUserPrincipal principal) {
+            extraClaims.put(CLAIM_ACTIVE, principal.user().isActive());
+            extraClaims.put(CLAIM_UID, principal.user().getId().toString());
         }
         return buildToken(extraClaims, userDetails, jwtExpiration);
     }
 
-    public String generateRefreshToken(UserDetails userDetails){
+    public String generateRefreshToken(UserDetails userDetails) {
         return buildToken(new HashMap<>(), userDetails, refreshExpiration);
     }
 
@@ -63,20 +74,15 @@ public class JwtService {
                 .compact();
     }
 
-    public boolean isTokenValid(String token, UserDetails userDetails) {
-        Claims claims = parseSignedClaims(token);
-        return claims.getSubject().equals(userDetails.getUsername());
-    }
-
     public Instant getExpirationDateFromToken(String token) {
-        return extractClaims(token, claims -> claims.getExpiration().toInstant());
+        return extractClaim(token, claims -> claims.getExpiration().toInstant());
     }
 
     public String extractUsername(String token) {
-        return extractClaims(token, Claims::getSubject);
+        return extractClaim(token, Claims::getSubject);
     }
 
-    private<T> T extractClaims(String token, Function<Claims, T> claimsResolver) {
+    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = parseSignedClaims(token);
         return claimsResolver.apply(claims);
     }

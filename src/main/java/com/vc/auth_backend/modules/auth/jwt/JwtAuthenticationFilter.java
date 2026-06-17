@@ -1,6 +1,9 @@
 package com.vc.auth_backend.modules.auth.jwt;
 
+import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.auth.service.CookieService;
+import com.vc.auth_backend.modules.user.entity.Role;
+import com.vc.auth_backend.modules.user.entity.User;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -15,21 +18,19 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    private final UserDetailsService userDetailsService;
+
     private final JwtService jwtService;
     private final CookieService cookieService;
     private final JsonMapper jsonMapper;
@@ -46,18 +47,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            final String userEmail = jwtService.extractUsername(token);
-
-            if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
-                if (jwtService.isTokenValid(token, userDetails)) {
-                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                            userDetails, null, userDetails.getAuthorities());
-
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
-                }
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                authenticateFromToken(token, request);
             }
+
         } catch (ExpiredJwtException ex) {
             log.debug("Expired JWT for URI: {}", request.getRequestURI());
             sendUnauthorizedResponse(response, "Access token expired. Please refresh your session");
@@ -66,30 +59,59 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             log.warn("Invalid JWT [{}] for URI: {}", ex.getClass().getSimpleName(), request.getRequestURI());
             sendUnauthorizedResponse(response, "Invalid token");
             return;
-        } catch (UsernameNotFoundException ex) {
-            log.warn("User from token not found");
-            sendUnauthorizedResponse(response, "Authentication failed");
-            return;
         }
+
         filterChain.doFilter(request, response);
+    }
+
+    private void authenticateFromToken(String token, HttpServletRequest request) {
+        String  email  = jwtService.extractUsername(token);
+        String  role   = jwtService.extractClaim(token, c -> c.get(JwtService.CLAIM_ROLE,   String.class));
+        Boolean active = jwtService.extractClaim(token, c -> c.get(JwtService.CLAIM_ACTIVE, Boolean.class));
+        String  uid    = jwtService.extractClaim(token, c -> c.get(JwtService.CLAIM_UID,    String.class));
+
+        if (email == null || role == null || active == null || uid == null) {
+            log.warn("JWT sin claims requeridos (role/active/uid). Token posiblemente desactualizado.");
+            return; // Pasa como anónimo → 401 del AuthorizationFilter si el endpoint lo requiere
+        }
+
+        if (!active) {
+            log.debug("JWT con claim active=false para email={}", email);
+            return; // Pasa como anónimo → 401 del AuthorizationFilter si el endpoint lo requiere
+        }
+
+        Role roleEnum = Role.valueOf(role.replace("ROLE_", ""));
+        User userStub = User.builder()
+                .id(UUID.fromString(uid))
+                .email(email)
+                .role(roleEnum)
+                .active(true)
+                .build();
+
+        CustomUserPrincipal principal = new CustomUserPrincipal(userStub);
+        UsernamePasswordAuthenticationToken authToken =
+                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authToken);
     }
 
     private void sendUnauthorizedResponse(HttpServletResponse response, String detail) throws IOException {
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        response.setHeader("WWW-Authenticate", "Bearer error=\"invalid_token\", error_description=\"" + detail + "\"");
+        response.setHeader("WWW-Authenticate",
+                "Bearer error=\"invalid_token\", error_description=\"" + detail + "\"");
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, detail);
         pd.setTitle("Authentication failed");
         jsonMapper.writeValue(response.getWriter(), pd);
     }
 
     private String extractToken(HttpServletRequest request) {
-        // header authorization (API y mobile)
+        // Header Authorization: Bearer <token> (API / mobile)
         String bearerToken = request.getHeader("Authorization");
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
         }
-        // http-only browser
+        // Cookie HTTP-Only (browser)
         return cookieService.getAccessToken(request).orElse(null);
     }
 }

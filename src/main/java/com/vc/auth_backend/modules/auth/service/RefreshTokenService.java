@@ -115,7 +115,7 @@ public class RefreshTokenService {
 
     @Transactional
     public RefreshToken verifyExpiration(RefreshToken token) {
-        if (token.getExpiryDate().compareTo(Instant.now()) < 0) {
+        if (token.getExpiryDate().isBefore(Instant.now())) {
             refreshTokenRepository.delete(token);
             throw new InvalidExceptionToken("Refresh token was expired. Please make a new sign in request");
         }
@@ -138,6 +138,7 @@ public class RefreshTokenService {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
+
     private String extractClientIp(HttpServletRequest request) {
         if (request == null) return null;
         String forwarded = request.getHeader("X-Forwarded-For");
