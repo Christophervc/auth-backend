@@ -9,6 +9,7 @@ import com.vc.auth_backend.modules.user.entity.Role;
 import com.vc.auth_backend.modules.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -22,4 +23,6 @@ public interface UserService {
     PublicUserResponse getPublicProfile(UUID userId);
     void changePassword(UUID userId, ChangePasswordReq request);
     void deactivateAccount(CustomUserPrincipal currentUser);
+    UserResponse updateAvatar(UUID userId, MultipartFile file);
+    void deleteAvatar(UUID userId);
 }

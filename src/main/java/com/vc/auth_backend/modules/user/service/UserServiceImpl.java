@@ -2,6 +2,7 @@ package com.vc.auth_backend.modules.user.service;
 
 import com.vc.auth_backend.modules.auth.service.RefreshTokenService;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
+import com.vc.auth_backend.modules.media.ImageService;
 import com.vc.auth_backend.modules.user.controller.dto.ChangePasswordReq;
 import com.vc.auth_backend.modules.user.controller.dto.PublicUserResponse;
 import com.vc.auth_backend.modules.user.controller.dto.UpdateUserProfileReq;
@@ -20,6 +21,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -31,6 +33,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenService refreshTokenService;
+    private final ImageService imageService;
 
     @Override
     public User getUserById(UUID id) {
@@ -133,6 +136,39 @@ public class UserServiceImpl implements UserService {
         user.setActive(false);
         refreshTokenService.logoutAll(user.getId()); // luego de desactivar mi cuenta cierro todas mis sesiones
         log.info("User {} has deactivate his/her account ", user.getEmail());
+    }
+
+    @Override
+    @Transactional
+    public UserResponse updateAvatar(UUID userId, MultipartFile file) {
+        User user = getUserById(userId);
+        // Si ya tiene un avatar subido por nuestro sistema, eliminarlo del proveedor primero
+        if (user.getAvatarPublicId() != null) {
+            imageService.deleteByPublicId(user.getAvatarPublicId());
+            log.info("Previous avatar deleted for userId={}", userId);
+        }
+        // Subir el nuevo avatar — carpeta segmentada por userId
+        var uploaded = imageService.uploadAvatar(file, userId);
+
+        user.setAvatar(uploaded.secureUrl());
+        user.setAvatarPublicId(uploaded.publicId());
+        log.info("Avatar updated for userId={}, publicId={}", userId, uploaded.publicId());
+
+        return toResponse(user);
+    }
+
+    @Override
+    @Transactional
+    public void deleteAvatar(UUID userId) {
+        User user = getUserById(userId);
+        // Solo eliminar del proveedor si el avatar fue subido por nuestro sistema
+        if (user.getAvatarPublicId() != null) {
+            imageService.deleteByPublicId(user.getAvatarPublicId());
+            user.setAvatarPublicId(null);
+            log.info("Avatar asset deleted from storage for userId={}", userId);
+        }
+        user.setAvatar(null);
+        log.info("Avatar cleared for userId={}", userId);
     }
 
     private void assertLocalUser(User user, String message) {

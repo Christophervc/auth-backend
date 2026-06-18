@@ -103,7 +103,11 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             user.setLastname(userInfo.getLastName());
             changed = true;
         }
-        if (userInfo.getAvatarUrl() != null && !userInfo.getAvatarUrl().equals(user.getAvatar())) {
+        // Solo sincronizar el avatar de Google si el usuario NO tiene un avatar propio subido
+        // por nuestro sistema. avatarPublicId != null indica que el usuario eligió su propia foto.
+        if (user.getAvatarPublicId() == null
+                && userInfo.getAvatarUrl() != null
+                && !userInfo.getAvatarUrl().equals(user.getAvatar())) {
             user.setAvatar(userInfo.getAvatarUrl());
             changed = true;
         }

@@ -12,10 +12,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -134,5 +136,36 @@ public class UserController {
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal currentUser) {
         userService.deactivateAccount(currentUser);
         return ResponseEntity.ok(new MessageResponse("Account deactivated successfully"));
+    }
+
+    @Operation(
+            summary = "Subir o reemplazar avatar",
+            description = "Sube una nueva foto de perfil. Si ya existía una, la elimina del proveedor de almacenamiento antes de subir la nueva. Límite: 2MB. Formatos: JPEG, PNG, WEBP, GIF.",
+            security = {
+                    @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME),
+                    @SecurityRequirement(name = OpenApiConfig.COOKIE_SCHEME)
+            }
+    )
+    @PutMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UserResponse> updateAvatar(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal currentUser,
+            @Parameter(description = "Archivo de imagen. Máx 2MB. Formatos: JPEG, PNG, WEBP, GIF.", required = true)
+            @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(userService.updateAvatar(currentUser.getId(), file));
+    }
+
+    @Operation(
+            summary = "Eliminar avatar",
+            description = "Elimina la foto de perfil del usuario autenticado. Si era una imagen subida por el sistema, también se elimina del proveedor de almacenamiento. Si era la foto de Google, solo se limpia la referencia local.",
+            security = {
+                    @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME),
+                    @SecurityRequirement(name = OpenApiConfig.COOKIE_SCHEME)
+            }
+    )
+    @DeleteMapping("/me/avatar")
+    public ResponseEntity<Void> deleteAvatar(
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal currentUser) {
+        userService.deleteAvatar(currentUser.getId());
+        return ResponseEntity.noContent().build();
     }
 }

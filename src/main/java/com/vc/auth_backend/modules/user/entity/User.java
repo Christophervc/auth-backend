@@ -49,6 +49,9 @@ public class User {
     @Column()
     private String avatar;
 
+    @Column(name = "avatar_public_id")
+    private String avatarPublicId;
+
     @Column(length = 20)
     private String phone;
 
