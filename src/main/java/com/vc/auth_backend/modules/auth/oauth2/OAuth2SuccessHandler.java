@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Optional;
 
 @Slf4j
@@ -52,7 +53,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         // Normalizar los atributos del proveedor a nuestro contrato interno
         OAuth2UserInfo userInfo = OAuth2UserInfoFactory.getOAuth2UserInfo(
-                registrationId, oauthToken.getPrincipal().getAttributes());
+                registrationId, Objects.requireNonNull(oauthToken.getPrincipal()).getAttributes());
 
         log.debug("OAuth2 success: provider={} email={}", registrationId, userInfo.getEmail());
 

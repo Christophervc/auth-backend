@@ -37,6 +37,7 @@ dependencies {
     implementation("dev.samstevens.totp:totp:1.7.1")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.zxing:javase:3.5.3")
+    implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
 
 
     runtimeOnly("org.postgresql:postgresql")
