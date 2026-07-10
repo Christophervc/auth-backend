@@ -131,6 +131,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 .avatar(userInfo.getAvatarUrl())
                 .country("PE")
                 .language("es-ES")
+                .emailVerified(true) // email verificado por google
                 .build();
         return userRepository.save(user);
     }

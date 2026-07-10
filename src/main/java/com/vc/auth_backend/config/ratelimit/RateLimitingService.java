@@ -36,6 +36,16 @@ public class RateLimitingService {
             .refillIntervally(5, Duration.ofMinutes(15))
             .build();
 
+    private final Bandwidth emailVerificationLimit = Bandwidth.builder()
+            .capacity(4)
+            .refillIntervally(4, Duration.ofHours(1))
+            .build();
+
+    private final Bandwidth registerLimit = Bandwidth.builder()
+            .capacity(5)
+            .refillIntervally(5, Duration.ofMinutes(10))
+            .build();
+
     /**
      * Resuelve un bucket de rate limiting basado en el tipo y el identificador del cliente.
      * @param type El tipo de bucket (TOTP, AUTH, OTP, GEN)
@@ -52,6 +62,8 @@ public class RateLimitingService {
             case "TOTP" -> totpLimit;
             case "AUTH" -> authLimit;
             case "OTP"  -> otpLimit;
+            case "EMAIL_VERIFICATION" -> emailVerificationLimit;
+            case "REGISTER" -> registerLimit;
             default     -> generalLimit;
         };
         return Bucket.builder().addLimit(limit).build();
