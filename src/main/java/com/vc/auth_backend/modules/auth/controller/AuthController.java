@@ -6,10 +6,7 @@ import com.vc.auth_backend.modules.auth.controller.dto.response.AuthResponse;
 import com.vc.auth_backend.modules.auth.controller.dto.response.LoginResponse;
 import com.vc.auth_backend.modules.auth.controller.dto.response.SessionResponse;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
-import com.vc.auth_backend.modules.auth.service.AuthenticationService;
-import com.vc.auth_backend.modules.auth.service.CookieService;
-import com.vc.auth_backend.modules.auth.service.PasswordResetService;
-import com.vc.auth_backend.modules.auth.service.RefreshTokenService;
+import com.vc.auth_backend.modules.auth.service.*;
 import com.vc.auth_backend.modules.user.controller.dto.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -37,6 +34,7 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final CookieService cookieService;
     private final PasswordResetService passwordResetService;
+    private final EmailVerificationService emailVerificationService;
 
     @Operation(
             summary = "Iniciar sesión",
@@ -59,15 +57,39 @@ public class AuthController {
 
     @Operation(
             summary = "Registrar usuario",
-            description = "Crea una nueva cuenta y abre sesion. Registra el dispositivo inicial.")
+            description = """
+                Crea una cuenta local pendiente de verificación y envía un código por email.
+                La respuesta es siempre la misma sin importar si el correo ya existía
+                (protección contra email enumeration). No inicia sesión: hay que
+                verificar el email y luego usar /login.
+                """)
     @PostMapping("/register")
     public ResponseEntity<MessageResponse> register(
             @Valid @RequestBody RegisterRequest request,
-            @Parameter(hidden = true) HttpServletRequest httpRequest,
-            @Parameter(hidden = true) HttpServletResponse httpResponse) {
+            @Parameter(hidden = true) HttpServletRequest httpRequest) {
         AuthResponse authResponse = authenticationService.register(request, httpRequest);
-        cookieService.addAuthCookies(httpResponse, authResponse);
-        return new ResponseEntity<>(new MessageResponse(authResponse.message()), HttpStatus.CREATED);
+        return ResponseEntity.ok(new MessageResponse(authResponse.message()));
+    }
+
+    @Operation(
+            summary = "Verificar email",
+            description = "Valida el código enviado al email y marca la cuenta como verificada. Idempotente.")
+    @PostMapping("/verify-email")
+    public ResponseEntity<MessageResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        emailVerificationService.verifyEmail(request);
+        return ResponseEntity.ok(new MessageResponse("Email verified successfully. You can now log in."));
+    }
+
+    @Operation(
+            summary = "Reenviar código de verificación",
+            description = """
+                Reenvía el código de verificación de email.
+                Responde 200 OK sin revelar si el email está registrado o ya verificado.
+                """)
+    @PostMapping("/resend-verification")
+    public ResponseEntity<MessageResponse> resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
+        emailVerificationService.resendVerification(request);
+        return ResponseEntity.ok(new MessageResponse("If the email is registered and pending verification, a new code has been sent."));
     }
 
     @Operation(

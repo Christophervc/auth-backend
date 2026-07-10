@@ -84,6 +84,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return pd;
     }
 
+    // Verificación de email
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ProblemDetail handleEmailNotVerified(EmailNotVerifiedException ex) {
+        log.warn("Login blocked: email not verified");
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        pd.setTitle("Email not verified");
+        return pd;
+    }
+
     // Autenticacion y autorizacion
     @ExceptionHandler(DisabledException.class)
     public ProblemDetail handleAccountSuspendedException(DisabledException ex) {
