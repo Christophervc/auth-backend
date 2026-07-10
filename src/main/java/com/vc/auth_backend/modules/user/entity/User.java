@@ -30,6 +30,9 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(nullable = false)
+    private boolean emailVerified;
+
     @Column
     private String password;
 
