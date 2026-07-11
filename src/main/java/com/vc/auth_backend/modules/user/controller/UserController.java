@@ -46,7 +46,7 @@ public class UserController {
                     @SecurityRequirement(name = OpenApiConfig.COOKIE_SCHEME)
             }
     )
-    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     @GetMapping
     public ResponseEntity<Page<UserResponse>> getAllUsers(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal currentUser,
@@ -63,7 +63,7 @@ public class UserController {
                     @SecurityRequirement(name = OpenApiConfig.COOKIE_SCHEME)
             }
     )
-    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     @PatchMapping("/{id}/status")
     public ResponseEntity<UserResponse> updateUserStatus(
             @Parameter(description = "ID del usuario a actualizar.")
