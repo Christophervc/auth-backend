@@ -90,13 +90,13 @@ public class UserController {
         return ResponseEntity.ok(userService.updateUserRole(id, request.role(), currentUser));
     }
 
-    @Operation(summary = "Actualizar mi perfil", description = "Actualiza los datos editables del perfil del usuario autenticado.",
+    @Operation(summary = "Actualizar mi perfil", description = "Actualiza parcialmente los datos editables del perfil del usuario autenticado.",
             security = {
                     @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME),
                     @SecurityRequirement(name = OpenApiConfig.COOKIE_SCHEME)
             }
     )
-    @PutMapping("/me")
+    @PatchMapping("/me")
     public ResponseEntity<UserResponse> updateMyProfile(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserPrincipal currentUser,
             @Valid @RequestBody UpdateUserProfileReq request) {
