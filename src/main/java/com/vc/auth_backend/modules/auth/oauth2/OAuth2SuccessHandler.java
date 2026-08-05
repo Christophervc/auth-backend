@@ -2,6 +2,7 @@ package com.vc.auth_backend.modules.auth.oauth2;
 
 import com.vc.auth_backend.modules.auth.controller.dto.response.AuthResponse;
 import com.vc.auth_backend.modules.auth.jwt.JwtService;
+import com.vc.auth_backend.modules.auth.repository.PreAuthRedisRepository;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.auth.service.CookieService;
 import com.vc.auth_backend.modules.auth.service.RefreshTokenService;
@@ -25,6 +26,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -34,12 +36,16 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final CookieService cookieService;
+    private final PreAuthRedisRepository preAuthRedisRepository;
 
     @Value("${app.oauth2.redirect-uri.success}")
     private String successRedirectUri;
 
     @Value("${app.oauth2.redirect-uri.failure}")
     private String failureRedirectUri;
+
+    @Value("${app.oauth2.redirect-uri.two-factor:http://localhost:4200/auth/2fa/verify}")
+    private String twoFactorRedirectUri;
 
     @Override
     @Transactional
@@ -73,7 +79,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         if (existingOAuthUser.isPresent()) {
             User user = existingOAuthUser.get();
             syncProfileFromProvider(user, userInfo); // actualiza nombre/avatar si cambiaron
-            issueTokensAndRedirect(request, response, user);
+            completeOAuthLogin(request, response, user);
             return;
         }
 
@@ -90,7 +96,30 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         // usuario completamente nuevo → crear cuenta
         User newUser = createOAuthUser(userInfo, registrationId);
         log.info("New user registered via OAuth2: provider={} userId={}", registrationId, newUser.getId());
-        issueTokensAndRedirect(request, response, newUser);
+        completeOAuthLogin(request, response, newUser);
+    }
+
+    /**
+     * OAuth2 valida el primer factor (el proveedor). Si el usuario activó 2FA,
+     * delega la emisión de tokens a /api/v1/auth/2fa/verify, igual que el login local.
+     */
+    private void completeOAuthLogin(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            User user) throws IOException {
+
+        if (user.isTwoFactorEnabled()) {
+            String preAuthToken = UUID.randomUUID().toString();
+            preAuthRedisRepository.save(preAuthToken, user.getEmail());
+            cookieService.addPreAuthCookie(response, preAuthToken);
+
+            invalidateSession(request);
+            log.info("OAuth2 first factor completed; 2FA required for userId={}", user.getId());
+            getRedirectStrategy().sendRedirect(request, response, twoFactorRedirectUri);
+            return;
+        }
+
+        issueTokensAndRedirect(request, response, user);
     }
 
     private void syncProfileFromProvider(User user, OAuth2UserInfo userInfo) {
@@ -131,6 +160,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 .avatar(userInfo.getAvatarUrl())
                 .country("PE")
                 .language("es-ES")
+                .emailVerified(true) // email verificado por google
                 .build();
         return userRepository.save(user);
     }

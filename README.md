@@ -1,362 +1,189 @@
-# Auth backend
+# Auth Backend
 
-Backend REST para autenticacion con JWT, manejo de sesiones con refresh tokens, carga de imagenes.
+API REST de autenticación y gestión de usuarios construida con Spring Boot. Expone sus recursos bajo `/api/v1` y prioriza sesiones seguras con JWT en cookies `HttpOnly`, tokens de refresco revocables y controles de abuso.
 
-## Tabla de contenido
+## Capacidades
 
-- [Resumen](#resumen)
-- [Stack tecnologico](#stack-tecnologico)
-- [Capacidades principales](#capacidades-principales)
-- [Arquitectura y modulos](#arquitectura-y-modulos)
-- [Autenticacion y autorizacion](#autenticacion-y-autorizacion)
-- [Rate limiting](#rate-limiting)
-- [Endpoints](#endpoints)
-- [Decisiones tecnicas](#decisiones-tecnicas)
-- [Configuracion local](#configuracion-local)
-- [Ejecucion](#ejecucion)
-- [OpenAPI y Swagger](#openapi-y-swagger)
-- [Formato de errores](#formato-de-errores)
+- Registro local con verificación de correo mediante código de un solo uso.
+- Inicio de sesión local y con Google OAuth2.
+- JWT de acceso y refresh tokens persistidos, rotativos y revocables.
+- Gestión de sesiones por dispositivo: consulta, cierre remoto y cierre global; máximo de cuatro sesiones activas por usuario.
+- Autenticación de dos factores (TOTP), QR de configuración, códigos de respaldo y detección de reutilización de códigos.
+- Recuperación de contraseña por OTP; al restablecerla se revocan todas las sesiones.
+- Perfiles de usuario, administración por rol y avatar almacenado en Cloudinary.
+- Validación y sanitización de avatares: firmas de archivo, decodificación, límite de dimensiones y recodificación de la imagen.
+- Rate limiting por categoría de operación e identificación por usuario autenticado o IP.
+- Errores uniformes con `ProblemDetail` y documentación OpenAPI/Swagger.
 
-## Resumen
+## Stack
 
-El proyecto esta construido con Spring Boot y expone una API versionada bajo `/api/v1`. El dominio principal cubre:
+- Java 25 y Spring Boot 4
+- Spring Security, OAuth2 Client y JWT (`jjwt`)
+- PostgreSQL con Spring Data JPA
+- Redis para códigos temporales y estado de pre-autenticación
+- Cloudinary para avatares
+- Resend para envío de correos
+- Bucket4j y Caffeine para rate limiting
+- TOTP, ZXing y TwelveMonkeys ImageIO para 2FA y procesamiento de imágenes
+- Gradle Wrapper y Docker Compose
 
-- autenticacion con JWT y refresh tokens persistidos
-- perfiles de usuario y control de roles
-- carga y limpieza de avatars en Cloudinary
+## Autenticación y seguridad
 
+La API acepta autenticación mediante:
 
-La API usa cookies `http-only` para navegadores, pero mantiene compatibilidad con `Authorization: Bearer <token>` para clientes moviles, integraciones o testing manual.
+1. Cookie `access_token` con `HttpOnly` para aplicaciones web.
+2. Encabezado `Authorization: Bearer <jwt>` para clientes no basados en navegador.
 
-## Stack tecnologico
+El filtro JWT prioriza el encabezado Bearer y usa la cookie si no está presente. Los tokens de acceso expiran a corto plazo; el refresh token se guarda en una cookie `HttpOnly`, se persiste en la base de datos y se rota al refrescar la sesión.
 
-### Base
-
-- Java 25
-- Spring Boot 4.0.6
-- Gradle Wrapper (`gradlew`, `gradlew.cmd`)
-
-### Web y API
-
-- Spring Web
-- Spring Validation
-- Spring Problem Details
-- Springdoc OpenAPI / Swagger UI
-
-### Seguridad
-
-- Spring Security
-- JWT con `jjwt`
-- cookies `http-only` para access token y refresh token
-- autorizacion por roles con `@PreAuthorize`
-
-### Persistencia
-
-- Spring Data JPA
-- PostgreSQL
-
-### Integraciones externas
-
-- Cloudinary para almacenamiento de imagenes
-
-### Calidad y soporte
-
-- MapStruct para mapeo DTO <-> entidad
-- Lombok
-- Bucket4j para rate limiting
-- Caffeine para cache de buckets
-- H2 para pruebas
-- Virtual Threads habilitados
-
-## Capacidades principales
-
-- login, registro, refresh, logout y logout global
-- maximo de 4 sesiones activas por usuario
-- access token y refresh token en cookies seguras para frontend web
-- compatibilidad adicional con bearer token en header
-- control de acceso por roles `USER`, `ADMIN`
-- carga de imagenes de perfil (avatar) validando tipo y tamano
-- respuestas de error consistentes con `ProblemDetail`
-- rate limiting segmentado por tipo de endpoint
-
-## Arquitectura y modulos
-
-La estructura sigue una organizacion por modulos funcionales:
-
-- `modules/auth`: login, registro, refresh tokens, cookies, JWT
-- `modules/user`: perfiles, roles, estado del usuario, estadisticas
-- `modules/media`: carga y borrado de imagenes
-- `config`: seguridad, OpenAPI, rate limiting
-- `shared`: DTOs comunes y manejo global de excepciones
-
-## Autenticacion y autorizacion
-
-### Mecanismo de autenticacion
-
-El backend soporta dos canales de autenticacion:
-
-1. Cookie `http-only` `access_token`
-2. Header `Authorization: Bearer <jwt>`
-
-El filtro `JwtAuthenticationFilter` intenta primero leer el header `Authorization` y, si no existe, usa la cookie `access_token`. Eso permite que:
-
-- el frontend web trabaje con cookies protegidas contra acceso desde JavaScript
-- clientes no browser sigan usando bearer tokens sin cambios
-
-### Refresh token
-
-- el refresh token tambien se guarda en cookie `http-only`
-- los refresh tokens se persisten en base de datos
-- al refrescar sesion, el refresh token actual se revoca y se emite uno nuevo
-- `logout` revoca la sesion actual
-- `logout-all` revoca todas las sesiones del usuario
+Las cuentas locales deben verificar su correo antes de iniciar sesión. Las cuentas creadas desde Google se consideran verificadas. OAuth2 usa el flujo estándar de Spring Security; el inicio se realiza en `/oauth2/authorization/google` y, tras completar el flujo, se establecen las cookies de sesión antes de redirigir al frontend configurado.
 
 ### Roles
 
-- `USER`: uso normal de la plataforma
-- `ADMIN`: control completo, incluyendo cambios de rol y borrado administrativo
+- `USER`: operaciones propias de la cuenta.
+- `ADMIN`: administración de roles.
+
+Las operaciones de listado y cambio de estado están protegidas para `ADMIN` a nivel de controlador; actualmente el enum de roles del proyecto define `USER` y `ADMIN`.
+
+### Sesiones y 2FA
+
+- Se permiten hasta **4 sesiones activas** por usuario.
+- Cada sesión registra dispositivo, sistema operativo, tipo de dispositivo, IP y última actividad.
+- El usuario puede revocar una sesión individual o todas sus sesiones.
+- 2FA usa códigos TOTP de seis dígitos y códigos de respaldo de un solo uso.
+- Durante el login con 2FA se utiliza una cookie temporal `pre_auth_token`; solo después de validar el código se emiten las cookies finales.
+- Desactivar 2FA y restablecer la contraseña revoca las sesiones activas.
 
 ## Rate limiting
 
-El rate limit se aplica a nivel de filtro sobre `/api/v1/**`.
+Se aplica a `/api/v1/**`. Para usuarios autenticados se usa el ID de usuario como clave; para solicitudes anónimas se usa la IP (se valida el primer valor de `X-Forwarded-For` cuando es válido).
 
-Politicas actuales:
-
-- endpoints generales: `90` requests por minuto
-- autenticacion (`/auth/login`, `/auth/register`): `10` requests por minuto
-- IA (`/ai/**`): `3` requests por dia
-
-Identificacion del cliente:
-
-- si el usuario esta autenticado, se usa su `userId`
-- si no lo esta, se usa `request.getRemoteAddr()`
-
-Implementacion:
-
-- Bucket4j para el control de tokens
-- Caffeine para cachear buckets por cliente
+| Categoría | Rutas | Límite |
+| --- | --- | --- |
+| General | resto de la API | 90 solicitudes/minuto |
+| Login | `/auth/login` | 10 solicitudes/minuto |
+| Registro | `/auth/register` | 5 solicitudes/10 minutos |
+| Recuperación OTP | `/auth/forgot-password`, `/verify-otp`, `/reset-password` | 3 solicitudes/hora |
+| Verificación de correo | `/auth/verify-email`, `/resend-verification` | 4 solicitudes/hora |
+| 2FA | `/auth/2fa/**` | 5 solicitudes/15 minutos |
 
 ## Endpoints
 
-### Auth
+Las rutas siguientes tienen el prefijo `/api/v1`.
 
-| Metodo | Ruta | Acceso | Descripcion |
+### Autenticación
+
+| Método | Ruta | Acceso | Descripción |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/auth/login` | Publico | autentica credenciales y escribe cookies de sesion |
-| `POST` | `/api/v1/auth/register` | Publico | registra un usuario y abre sesion |
-| `POST` | `/api/v1/auth/refresh` | Publico con cookie de refresh | rota tokens usando `refresh_token` |
-| `POST` | `/api/v1/auth/logout` | Publico con cookie de refresh opcional | limpia cookies y revoca la sesion actual si existe |
-| `POST` | `/api/v1/auth/logout-all` | Autenticado | revoca todas las sesiones del usuario |
+| `POST` | `/auth/register` | Público | Crea una cuenta local pendiente de verificación y envía el código por correo. La respuesta no revela si el correo ya existe. |
+| `POST` | `/auth/verify-email` | Público | Verifica el código de correo; la operación es idempotente. |
+| `POST` | `/auth/resend-verification` | Público | Reenvía el código sin revelar si la cuenta existe o ya está verificada. |
+| `POST` | `/auth/login` | Público | Inicia sesión; si 2FA está activo, inicia la preautenticación. |
+| `POST` | `/auth/refresh` | Cookie de refresh | Rota el refresh token y actualiza las cookies de sesión. |
+| `POST` | `/auth/logout` | Público con cookie opcional | Revoca la sesión actual cuando existe y limpia las cookies. |
+| `POST` | `/auth/logout-all` | Autenticado | Revoca todas las sesiones del usuario. |
+| `GET` | `/auth/sessions` | Autenticado | Lista las sesiones activas, incluida la marca de sesión actual. |
+| `DELETE` | `/auth/sessions/{sessionId}` | Autenticado | Revoca una sesión propia por ID. |
+| `POST` | `/auth/forgot-password` | Público | Envía un OTP de recuperación sin revelar si el correo está registrado. |
+| `POST` | `/auth/verify-otp` | Público | Valida un OTP sin consumirlo. |
+| `POST` | `/auth/reset-password` | Público | Cambia la contraseña, consume el OTP y revoca todas las sesiones. |
 
-### Users
+### Autenticación de dos factores
 
-| Metodo | Ruta | Acceso | Descripcion |
+| Método | Ruta | Acceso | Descripción |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/users/me` | Autenticado | obtiene el perfil del usuario actual |
-| `GET` | `/api/v1/users` | `ADMIN` | lista usuarios paginados |
-| `PATCH` | `/api/v1/users/{id}/status` | `ADMIN` | activa o desactiva un usuario |
-| `PATCH` | `/api/v1/users/{id}/role` | `ADMIN` | cambia el rol de un usuario |
-| `GET` | `/api/v1/users/{id}/stats` | `ADMIN`| obtiene estadisticas agregadas del usuario |
-| `PUT` | `/api/v1/users/me` | Autenticado | actualiza perfil propio |
-| `GET` | `/api/v1/users/{id}/public` | Publico | obtiene perfil publico |
-| `PATCH` | `/api/v1/users/me/change-password` | Autenticado | cambia la contrasena propia |
-| `DELETE` | `/api/v1/users/me` | Autenticado | desactiva la cuenta propia |
+| `POST` | `/auth/2fa/setup` | Autenticado | Genera el secreto y el QR para configurar una aplicación autenticadora. |
+| `POST` | `/auth/2fa/confirm-setup` | Autenticado | Confirma el primer código TOTP, activa 2FA y devuelve los códigos de respaldo una sola vez. |
+| `POST` | `/auth/2fa/verify` | Público con cookie de preautenticación | Completa el login con un código TOTP o de respaldo. |
+| `POST` | `/auth/2fa/disable` | Autenticado | Desactiva 2FA tras validar un código TOTP. |
 
-### Media
+### Usuarios
 
-| Metodo | Ruta | Acceso | Descripcion |
+| Método | Ruta | Acceso | Descripción |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/media/upload` | Autenticado | sube una imagen a Cloudinary |
-| `DELETE` | `/api/v1/media/{postId}/images/{imageId}` | Autenticado | elimina una imagen de un post |
+| `GET` | `/users/me` | Autenticado | Obtiene el perfil propio. |
+| `PUT` | `/users/me` | Autenticado | Actualiza los datos editables del perfil propio. |
+| `PATCH` | `/users/me/change-password` | Autenticado | Cambia la contraseña propia. |
+| `DELETE` | `/users/me` | Autenticado | Desactiva la cuenta propia. |
+| `PUT` | `/users/me/avatar` | Autenticado | Sube o reemplaza el avatar (`multipart/form-data`, campo `file`). |
+| `DELETE` | `/users/me/avatar` | Autenticado | Elimina el avatar. |
+| `GET` | `/users/{id}/public` | Autenticado | Obtiene el perfil público de un usuario. |
+| `GET` | `/users` | `ADMIN`| Lista usuarios paginados. |
+| `PATCH` | `/users/{id}/status` | `ADMIN` | Activa o desactiva un usuario. |
+| `PATCH` | `/users/{id}/role` | `ADMIN` | Cambia el rol de un usuario. |
 
-Restricciones de upload:
+### Avatar
 
-- tipos permitidos: `image/jpeg`, `image/png`, `image/webp`, `image/gif`
-- tamano maximo: `5MB`
-- carpetas permitidas: `avatars`, `covers`
+El avatar admite JPEG, PNG, WEBP y GIF, con un límite de **2 MB** y dimensiones máximas de **2000 × 2000 px**. La imagen se vuelve a codificar antes de enviarse a Cloudinary, lo que elimina metadatos y reduce riesgos de archivos polyglot. Al reemplazar un avatar propio se elimina el archivo anterior; para avatares de Google solo se elimina la referencia local.
 
-## Decisiones tecnicas
-
-### 2. Limite de 4 sesiones activas por usuario
-
-La regla de negocio se implementa en `RefreshTokenService` con `MAX_ACTIVE_SESSIONS = 4`.
-
-Motivos:
-
-- controla abuso de cuentas compartidas
-- acota la cantidad de refresh tokens activos que se deben mantener
-- reduce superficie de riesgo si un usuario deja sesiones abiertas en varios dispositivos
-- sigue siendo un limite razonable para uso real: desktop, laptop, movil y una sesion adicional
-
-Detalle importante:
-
-- el control se hace sobre refresh tokens activos, no sobre access tokens
-- antes de contar sesiones activas, el servicio limpia refresh tokens expirados del usuario
-- si se alcanza el maximo, se responde con `409 Conflict`
-
-### 3. Cookies `http-only` en lugar de exponer tokens al frontend
-
-El sistema prioriza cookies `http-only` para web y conserva bearer token como compatibilidad.
-
-Motivos:
-
-- un token guardado en `localStorage` o accesible desde JavaScript queda mas expuesto ante XSS
-- una cookie `http-only` no puede ser leida desde el codigo del navegador
-- `SameSite` y `Secure` permiten endurecer la politica segun ambiente
-- el filtro JWT mantiene compatibilidad con clientes que no usan cookies
-
-Resultado:
-
-- frontend browser: flujo principal con cookies
-- mobile/API clients: flujo compatible con bearer token
-
-### 5. `RateLimitFilter#doFilterInternal` en lugar de `HandlerInterceptor`
-
-En este proyecto el rate limiting se implementa como filtro (`OncePerRequestFilter`) y no como `WebMvc Interceptor`.
-
-Motivos tecnicos:
-
-- el filtro actua mas temprano en la cadena de request, antes del despacho MVC y antes de parte del trabajo del controlador
-- permite cortar la peticion con `429` sin entrar a la resolucion del handler
-- convive mejor con el endpoint SSE `/api/v1/ai/improve/stream`, donde un interceptor puede ser mas propenso a comportamientos incomodos alrededor del ciclo async/streaming
-- el proyecto ya resuelve autenticacion por filtros; aplicar rate limiting en la misma capa reduce diferencias de comportamiento entre rutas normales y rutas streaming
-- el filtro puede distinguir rutas de IA, auth y generales con costo muy bajo y sin depender del binding MVC
-
-En particular para SSE:
-
-- el endpoint de IA responde con `text/event-stream`
-- una vez abierto el stream, conviene que los rechazos ocurran antes de entrar a la logica del handler
-- el filtro evita problemas de orden entre preHandle/postHandle/afterCompletion y el lifecycle async de una respuesta que puede permanecer abierta durante mas tiempo
-
-### 7. Refresh token persistido y revocable
-
-El refresh token no es puramente stateless. Se persiste y tiene bandera `revoked`.
-
-Motivos:
-
-- habilita logout real por sesion
-- habilita logout global
-- habilita limite de sesiones concurrentes
-- permite invalidar sesiones aun cuando el JWT de refresh no haya expirado
-
-### 8. Rate limiting por categoria de trafico
-
-No todas las rutas tienen el mismo costo ni el mismo perfil de abuso:
-
-- `login/register` necesitan proteccion adicional ante brute force
-- IA cuesta mas dinero y tiempo que un endpoint CRUD normal
-- endpoints generales requieren una politica mas permisiva
-
-Por eso se usan buckets separados:
-
-- `AUTH`
-- `AI`
-- `GEN`
-
-### 9. OpenAPI alineado con seguridad real
-
-La documentacion OpenAPI modela los dos mecanismos validos de autenticacion:
-
-- `bearerAuth`
-- `cookieAuth`
-
-Esto evita documentacion incompleta donde Swagger solo muestre bearer token cuando el frontend real usa cookies `http-only`.
-
-## Configuracion local
+## Configuración local
 
 ### Requisitos
 
 - Java 25
-- PostgreSQL 17
-- Gradle Wrapper
+- Docker y Docker Compose (PostgreSQL 17 y Redis 7)
 
-### Variables y propiedades relevantes
+### Variables de entorno
 
-El proyecto usa `application.properties`, `application-dev.properties` y `.env`.
+No versionar credenciales reales. Crea un archivo `.env` para Docker y proporciona los secretos por variables de entorno o por un perfil local no versionado.
 
-Configurar al menos:
+```dotenv
+POSTGRES_USER=auth_user
+POSTGRES_PASSWORD=una_contrasena_segura
+POSTGRES_DB=auth_db
 
-- `spring.datasource.url`
-- `spring.datasource.username`
-- `spring.datasource.password`
-- `jwt.secret`
-- `jwt.time.expiration`
-- `jwt.time.refresh-expiration`
-- `cloudinary.cloud-name`
-- `cloudinary.api-key`
-- `cloudinary.api-secret`
+REDIS_HOST=localhost
+REDIS_PORT=6379
 
-Propiedades destacadas:
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
 
-- `spring.jpa.open-in-view=false`
-- `spring.threads.virtual.enabled=true`
-- `spring.mvc.problemdetails.enabled=true`
-- `app.cookie.secure`
-- `app.cookie.same-site`
+EMAIL_FROM=...
+RESEND_API_KEY=...
+OTP_EXPIRATION_MINUTES=10
+ENCRYPTION_SECRET_KEY=<clave_AES_base64_de_32_bytes>
 
-### Nota operativa
+OAUTH2_REDIRECT_SUCCESS=http://localhost:3000/auth/callback
+OAUTH2_REDIRECT_FAILURE=http://localhost:3000/login
+```
 
-Las credenciales y secretos deben tratarse como configuracion sensible del entorno. Para ambientes reales, conviene moverlos a variables de entorno o un secret manager y no mantener valores reales en archivos versionados.
+Además de las propiedades de base de datos y JWT, para Google OAuth2 se requieren `spring.security.oauth2.client.registration.google.client-id`, `client-secret`, `scope=openid,email,profile` y una URL de callback que coincida con la registrada en Google Cloud Console: `http://localhost:8080/login/oauth2/code/google` en desarrollo.
 
-## Ejecucion
+Propiedades relevantes:
 
-### 1. Levantar PostgreSQL con Docker Compose
+- `jwt.secret`, `jwt.time.expiration`, `jwt.time.refresh-expiration`
+- `app.cookie.secure`, `app.cookie.same-site`
+- `app.otp.expiration-minutes`, `app.email-verification.expiration-minutes`
+- `app.2fa.pre-auth-expiration-minutes`, `app.2fa.issuer`, `app.2fa.digits`, `app.2fa.period`
+- `app.encryption.secret-key` para cifrar secretos 2FA y códigos de respaldo en reposo
+
+En producción, habilita cookies seguras, configura CORS con el dominio real del frontend, usa Redis con contraseña/TLS y almacena todos los secretos en un gestor de secretos.
+
+## Ejecución
 
 ```powershell
+# Levanta PostgreSQL y Redis
 docker compose up -d
+
+# Ejecuta la aplicación
+.\gradlew.bat bootRun
+
+# Compila y ejecuta las pruebas
+.\gradlew.bat test
 ```
 
-### 2. Ejecutar la aplicacion
+Servicios locales de Docker:
 
-```powershell
-.\mvnw.cmd spring-boot:run
-```
+- PostgreSQL: `localhost:5432`
+- Redis: `localhost:6379`
+- Redis Commander: `http://localhost:8081`
 
-### 3. Compilar
+## OpenAPI y errores
 
-```powershell
-.\gradlew.cmd clean compile
-```
-
-### 4. Ejecutar tests
-
-```powershell
-.\gradlew.cmd test
-```
-
-## OpenAPI y Swagger
-
-Documentacion disponible una vez levantada la aplicacion:
+Con la aplicación en ejecución:
 
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
 - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
 
-La configuracion OpenAPI documenta:
-
-- tags por controlador
-- summary y description por endpoint
-- `ParameterObject` para filtros
-- seguridad por cookie y bearer token en endpoints protegidos
-
-## Formato de errores
-
-La API usa `ProblemDetail` y `application/problem+json` para respuestas de error.
-
-Casos cubiertos:
-
-- `400 Bad Request` para validaciones o argumentos invalidos
-- `401 Unauthorized` para credenciales invalidas o tokens invalidos
-- `403 Forbidden` para acceso denegado
-- `404 Not Found` para recursos inexistentes o drafts no visibles
-- `409 Conflict` para conflictos de negocio, incluyendo limite de sesiones
-- `429 Too Many Requests` para rate limiting
-- `503 Service Unavailable` para fallas de servicios externos
-- `500 Internal Server Error` con `traceId` para errores no controlados
-
-## Resumen de la propuesta tecnica
-
-Este backend privilegia decisiones conservadoras en seguridad y operacion:
-
-- cookies `http-only` para reducir exposicion de tokens
-- refresh tokens persistidos para logout real y control de sesiones
-- rate limiting estratificado por costo y riesgo
+Los errores usan `application/problem+json` mediante `ProblemDetail`. Entre los estados habituales están `400` para validaciones, `401` para autenticación faltante o inválida, `403` para autorización, `404` para recursos inexistentes, `409` para conflictos como el límite de sesiones, `429` para rate limiting y `503` para fallos de servicios externos.

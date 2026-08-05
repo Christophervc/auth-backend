@@ -28,7 +28,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Pattern VALID_IP = Pattern.compile(
             "^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$" + // IPv4
-            "|^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$"                                    // IPv6
+                    "|^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$"                                    // IPv6
     );
     private final RateLimitingService rateLimitingService;
     private final JsonMapper jsonMapper;
@@ -72,12 +72,21 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return "TOTP";
         }
         if (uri.startsWith("/api/v1/auth/forgot-password") ||
-            uri.startsWith("/api/v1/auth/verify-otp") ||
-            uri.startsWith("/api/v1/auth/reset-password")) {
+                uri.startsWith("/api/v1/auth/verify-otp") ||
+                uri.startsWith("/api/v1/auth/reset-password")) {
             return "OTP";
         }
-        if (uri.startsWith("/api/v1/auth/login") ||
-            uri.startsWith("/api/v1/auth/register")) {
+
+        if (uri.startsWith("/api/v1/auth/verify-email") ||
+                uri.startsWith("/api/v1/auth/resend-verification")) {
+            return "EMAIL_VERIFICATION";
+        }
+
+        if (uri.startsWith("/api/v1/auth/register")) {
+            return "REGISTER";
+        }
+
+        if (uri.startsWith("/api/v1/auth/login")) {
             return "AUTH";
         }
         return "GEN";

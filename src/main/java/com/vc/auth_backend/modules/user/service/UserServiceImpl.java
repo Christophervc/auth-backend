@@ -89,9 +89,16 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse updateMyProfile(UUID userId, UpdateUserProfileReq request) {
         User user = getUserById(userId);
-        user.setName(request.name());
-        user.setLastname(request.lastname());
-        user.setPhone(request.phone());
+
+        if (request.name() != null) {
+            user.setName(request.name());
+        }
+        if (request.lastname() != null) {
+            user.setLastname(request.lastname());
+        }
+        if (request.phone() != null) {
+            user.setPhone(request.phone());
+        }
         return toResponse(user);
     }
 

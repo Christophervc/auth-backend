@@ -11,8 +11,10 @@ import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.user.entity.Role;
 import com.vc.auth_backend.modules.user.entity.User;
 import com.vc.auth_backend.modules.user.repository.UserRepository;
+import com.vc.auth_backend.shared.exception.EmailNotVerifiedException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -23,8 +25,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthenticationService {
@@ -33,7 +37,8 @@ public class AuthServiceImpl implements AuthenticationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenService refreshTokenService;
-    private final PreAuthRedisRepository  preAuthRedisRepository;
+    private final PreAuthRedisRepository preAuthRedisRepository;
+    private final EmailVerificationService emailVerificationService;
 
     @Override
     public AuthResponse authenticate(LoginRequest request, HttpServletRequest httpRequest) {
@@ -41,8 +46,13 @@ public class AuthServiceImpl implements AuthenticationService {
                 new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
         CustomUserPrincipal userDetails = (CustomUserPrincipal) authentication.getPrincipal();
+        User user = Objects.requireNonNull(userDetails).user();
 
-        if (Objects.requireNonNull(userDetails).user().isTwoFactorEnabled()) {
+        if (user.isLocalUser() && !user.isEmailVerified()) {
+            throw new EmailNotVerifiedException("Please verify your email before logging in.");
+        }
+
+        if (user.isTwoFactorEnabled()) {
             String preAuthToken = UUID.randomUUID().toString();
             preAuthRedisRepository.save(preAuthToken, userDetails.getUsername());
 
@@ -69,8 +79,20 @@ public class AuthServiceImpl implements AuthenticationService {
         if (!request.password().equals(request.confirmPassword())) {
             throw new IllegalArgumentException("Passwords do not match");
         }
-        if (userRepository.findByEmail(request.email()).isPresent()) {
-            throw new DataIntegrityViolationException("Email is already registered");
+
+        final String genericMessage = "If this email is available, we've sent you a verification code.";
+
+        Optional<User> existingUserOpt = userRepository.findByEmail(request.email());
+
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
+            //throw new DataIntegrityViolationException("Email is already registered");
+            if (existingUser.isLocalUser() && !existingUser.isEmailVerified()) {
+                emailVerificationService.sendVerificationCode(existingUser);
+            } else {
+                log.debug("Registration attempt for an already-registered email ignored");
+            }
+            return AuthResponse.builder().message(genericMessage).build();
         }
 
         User newUser = User.builder()
@@ -81,9 +103,20 @@ public class AuthServiceImpl implements AuthenticationService {
                 .active(true)
                 .country("PE")
                 .language("es-ES")
+                .emailVerified(false)
                 .build();
-        userRepository.save(newUser);
+        //userRepository.save(newUser);
 
+        try {
+            userRepository.saveAndFlush(newUser);
+        } catch (DataIntegrityViolationException ex) {
+            log.debug("Race condition on register: email was taken concurrently");
+            return AuthResponse.builder().message(genericMessage).build();
+        }
+
+        emailVerificationService.sendVerificationCode(newUser);
+        return AuthResponse.builder().message(genericMessage).build();
+        /*
         UserDetails userDetails = new CustomUserPrincipal(newUser);
         String accessToken = jwtService.generateToken(userDetails);
         String refreshToken = refreshTokenService
@@ -94,6 +127,8 @@ public class AuthServiceImpl implements AuthenticationService {
                 .refreshToken(refreshToken)
                 .message("Register successfully")
                 .build();
+
+         */
     }
 
     @Override
