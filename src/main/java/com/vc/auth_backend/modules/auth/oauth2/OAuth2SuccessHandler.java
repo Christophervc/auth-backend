@@ -1,6 +1,7 @@
 package com.vc.auth_backend.modules.auth.oauth2;
 
 import com.vc.auth_backend.modules.auth.controller.dto.response.AuthResponse;
+import com.vc.auth_backend.modules.auth.entity.RefreshToken;
 import com.vc.auth_backend.modules.auth.jwt.JwtService;
 import com.vc.auth_backend.modules.auth.repository.PreAuthRedisRepository;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
@@ -171,13 +172,12 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             User user) throws IOException {
 
         CustomUserPrincipal principal = new CustomUserPrincipal(user);
-        String accessToken = jwtService.generateToken(principal);
-        // pasar request para capturar user-agent del browser que hizo oauth2
-        String refreshToken = refreshTokenService.createRefreshToken(user.getId(), request).getToken();
+        RefreshToken refreshTokenEntity = refreshTokenService.createRefreshToken(user.getId(), request);
+        String accessToken = jwtService.generateToken(principal, refreshTokenEntity.getId());
 
         AuthResponse authResponse = AuthResponse.builder()
                 .token(accessToken)
-                .refreshToken(refreshToken)
+                .refreshToken(refreshTokenEntity.getToken())
                 .message("OAuth2 login successful")
                 .build();
         // Las cookies http-only quedan seteadas en el browser.

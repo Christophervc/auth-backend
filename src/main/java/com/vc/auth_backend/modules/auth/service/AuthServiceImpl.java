@@ -63,12 +63,11 @@ public class AuthServiceImpl implements AuthenticationService {
                     .build();
         }
 
-        String accessToken = jwtService.generateToken(userDetails);
-        String refreshToken = refreshTokenService
-                .createRefreshToken(userDetails.getId(), httpRequest).getToken();
+        RefreshToken refreshTokenEntity = refreshTokenService.createRefreshToken(userDetails.getId(), httpRequest);
+        String accessToken = jwtService.generateToken(userDetails, refreshTokenEntity.getId());
         return AuthResponse.builder()
                 .token(accessToken)
-                .refreshToken(refreshToken)
+                .refreshToken(refreshTokenEntity.getToken())
                 .message("Login successfully")
                 .build();
     }
@@ -142,14 +141,13 @@ public class AuthServiceImpl implements AuthenticationService {
                             refreshTokenService.touchLastUsedAt(requestRefreshToken);
                             refreshTokenService.logout(requestRefreshToken);
                             CustomUserPrincipal userDetails = new CustomUserPrincipal(user);
-                            String newAccessToken = jwtService.generateToken(userDetails);
-                            String newRefreshToken = refreshTokenService
-                                    .createRefreshToken(user.getId()).getToken();
+                            RefreshToken newRefreshTokenEntity = refreshTokenService.createRefreshToken(user.getId());
+                            String newAccessToken = jwtService.generateToken(userDetails, newRefreshTokenEntity.getId());
 
                             return AuthResponse.builder()
                                     .token(newAccessToken)
                                     .message("Token refreshed successfully")
-                                    .refreshToken(newRefreshToken)
+                                    .refreshToken(newRefreshTokenEntity.getToken())
                                     .build();
                         }
                 ).orElseThrow(() -> new RuntimeException("Refresh token is not in database!"));

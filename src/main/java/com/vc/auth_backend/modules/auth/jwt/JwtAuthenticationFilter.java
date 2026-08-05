@@ -1,5 +1,6 @@
 package com.vc.auth_backend.modules.auth.jwt;
 
+import com.vc.auth_backend.modules.auth.repository.SessionRedisRepository;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.auth.service.CookieService;
 import com.vc.auth_backend.modules.user.entity.Role;
@@ -34,6 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final CookieService cookieService;
     private final JsonMapper jsonMapper;
+    private final SessionRedisRepository sessionRedisRepository;
 
     @Override
     protected void doFilterInternal(
@@ -69,15 +71,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String  role   = jwtService.extractClaim(token, c -> c.get(JwtService.CLAIM_ROLE,   String.class));
         Boolean active = jwtService.extractClaim(token, c -> c.get(JwtService.CLAIM_ACTIVE, Boolean.class));
         String  uid    = jwtService.extractClaim(token, c -> c.get(JwtService.CLAIM_UID,    String.class));
+        String  sid    = jwtService.extractClaim(token, c -> c.get(JwtService.CLAIM_SID,    String.class));
 
-        if (email == null || role == null || active == null || uid == null) {
-            log.warn("JWT sin claims requeridos (role/active/uid). Token posiblemente desactualizado.");
+        if (email == null || role == null || active == null || uid == null || sid == null) {
+            log.warn("JWT without required claims (role/active/uid/sid). The token may be out of date.");
             return; // Pasa como anónimo → 401 del AuthorizationFilter si el endpoint lo requiere
         }
 
         if (!active) {
-            log.debug("JWT con claim active=false para email={}", email);
+            log.debug("JWT con claim active=false for email={}", email);
             return; // Pasa como anónimo → 401 del AuthorizationFilter si el endpoint lo requiere
+        }
+
+        if (!sessionRedisRepository.exists(UUID.fromString(sid))) {
+            log.debug("JWT with sid={} not found in Redis (session revoked or expired)", sid);
+            return; // Pasa como anónimo → 401. Esto es lo que cierra la ventana de revocación.
         }
 
         Role roleEnum = Role.valueOf(role.replace("ROLE_", ""));

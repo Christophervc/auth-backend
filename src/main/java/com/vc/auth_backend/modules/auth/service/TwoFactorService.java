@@ -3,6 +3,7 @@ package com.vc.auth_backend.modules.auth.service;
 import com.vc.auth_backend.modules.auth.controller.dto.response.AuthResponse;
 import com.vc.auth_backend.modules.auth.controller.dto.response.ConfirmSetupResponse;
 import com.vc.auth_backend.modules.auth.controller.dto.response.SetupResponse;
+import com.vc.auth_backend.modules.auth.entity.RefreshToken;
 import com.vc.auth_backend.modules.auth.jwt.JwtService;
 import com.vc.auth_backend.modules.auth.repository.PreAuthRedisRepository;
 import com.vc.auth_backend.modules.auth.repository.UsedTotpCodeRedisRepository;
@@ -129,12 +130,12 @@ public class TwoFactorService {
 
         // 4. Emitir tokens finales
         CustomUserPrincipal principal = new CustomUserPrincipal(user);
-        String accessToken = jwtService.generateToken(principal);
-        String refreshToken = refreshTokenService.createRefreshToken(user.getId(), httpRequest).getToken();
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
+        String accessToken = jwtService.generateToken(principal,  refreshToken.getId());
 
         return AuthResponse.builder()
                 .token(accessToken)
-                .refreshToken(refreshToken)
+                .refreshToken(refreshToken.getToken())
                 .requiresTwoFactor(false)
                 .message("Login successfully completed")
                 .build();

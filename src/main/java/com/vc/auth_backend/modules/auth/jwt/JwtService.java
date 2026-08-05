@@ -37,6 +37,7 @@ public class JwtService {
     static final String CLAIM_ROLE   = "role";
     static final String CLAIM_ACTIVE = "active";
     static final String CLAIM_UID    = "uid";
+    static final String CLAIM_SID    = "sid";
 
     @PostConstruct
     private void initSigningKey() {
@@ -44,7 +45,7 @@ public class JwtService {
         this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String generateToken(UserDetails userDetails) {
+    public String generateToken(UserDetails userDetails, UUID sessionId) {
         Map<String, Object> extraClaims = new HashMap<>();
         var authorities = userDetails.getAuthorities();
         if (authorities != null && !authorities.isEmpty()) {
@@ -55,6 +56,7 @@ public class JwtService {
             extraClaims.put(CLAIM_ACTIVE, principal.user().isActive());
             extraClaims.put(CLAIM_UID, principal.user().getId().toString());
         }
+        extraClaims.put(CLAIM_SID, sessionId.toString());
         return buildToken(extraClaims, userDetails, jwtExpiration);
     }
 

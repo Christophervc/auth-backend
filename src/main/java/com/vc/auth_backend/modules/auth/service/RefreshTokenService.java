@@ -4,6 +4,7 @@ import com.vc.auth_backend.modules.auth.controller.dto.response.SessionResponse;
 import com.vc.auth_backend.modules.auth.repository.RefreshTokenRepository;
 import com.vc.auth_backend.modules.auth.entity.RefreshToken;
 import com.vc.auth_backend.modules.auth.jwt.JwtService;
+import com.vc.auth_backend.modules.auth.repository.SessionRedisRepository;
 import com.vc.auth_backend.modules.auth.security.CustomUserPrincipal;
 import com.vc.auth_backend.modules.user.entity.User;
 import com.vc.auth_backend.modules.user.repository.UserRepository;
@@ -32,6 +33,7 @@ public class RefreshTokenService {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final UserAgentParser userAgentParser;
+    private final SessionRedisRepository sessionRedisRepository;
 
     private static final int MAX_ACTIVE_SESSIONS = 4;
 
@@ -65,7 +67,9 @@ public class RefreshTokenService {
                 .deviceType(deviceInfo.deviceType())
                 .ipAddress(ipAddress)
                 .build();
-        return refreshTokenRepository.save(refreshToken);
+        RefreshToken saved = refreshTokenRepository.save(refreshToken);
+        sessionRedisRepository.save(saved.getId(), userId, saved.getExpiryDate());
+        return saved;
     }
 
     @Transactional
@@ -95,6 +99,7 @@ public class RefreshTokenService {
         }
         session.setRevoked(true);
         refreshTokenRepository.save(session);
+        sessionRedisRepository.delete(sessionId);
         log.info("Session {} revoked by userId={}", sessionId, requestingUserId);
     }
 
@@ -103,6 +108,7 @@ public class RefreshTokenService {
         refreshTokenRepository.findByToken(token).ifPresent(refreshToken -> {
             refreshToken.setRevoked(true);
             refreshTokenRepository.save(refreshToken);
+            sessionRedisRepository.delete(refreshToken.getId());
         });
     }
 
@@ -110,7 +116,10 @@ public class RefreshTokenService {
     public void logoutAll(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
+        List<RefreshToken> activeSessions = refreshTokenRepository.findActiveSessionsByUser(user, Instant.now());
         refreshTokenRepository.revokeAllUserTokens(user);
+        activeSessions.forEach(rt -> sessionRedisRepository.delete(rt.getId()));
+        log.info("All sessions revoked for userId={} ({} sessions cleared from Redis)", userId, activeSessions.size());
     }
 
     @Transactional
