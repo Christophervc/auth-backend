@@ -132,7 +132,7 @@ public class AuthServiceImpl implements AuthenticationService {
 
     @Override
     @Transactional
-    public AuthResponse refreshToken(RefreshTokenRequest request) {
+    public AuthResponse refreshToken(RefreshTokenRequest request, HttpServletRequest httpRequest) {
         String requestRefreshToken = request.refreshToken();
         return refreshTokenService.findByToken(requestRefreshToken)
                 .map(refreshTokenService::verifyExpiration)
@@ -141,7 +141,7 @@ public class AuthServiceImpl implements AuthenticationService {
                             refreshTokenService.touchLastUsedAt(requestRefreshToken);
                             refreshTokenService.logout(requestRefreshToken);
                             CustomUserPrincipal userDetails = new CustomUserPrincipal(user);
-                            RefreshToken newRefreshTokenEntity = refreshTokenService.createRefreshToken(user.getId());
+                            RefreshToken newRefreshTokenEntity = refreshTokenService.createRefreshToken(user.getId(), httpRequest);
                             String newAccessToken = jwtService.generateToken(userDetails, newRefreshTokenEntity.getId());
 
                             return AuthResponse.builder()

@@ -101,7 +101,7 @@ public class AuthController {
             @Parameter(hidden = true) HttpServletResponse response) {
         String token = cookieService.getRefreshToken(request)
                 .orElseThrow(() -> new IllegalArgumentException("Refresh token cookie not found"));
-        AuthResponse auth = authenticationService.refreshToken(new RefreshTokenRequest(token));
+        AuthResponse auth = authenticationService.refreshToken(new RefreshTokenRequest(token), request);
         cookieService.addAuthCookies(response, auth);
         return ResponseEntity.ok(new MessageResponse("Token refreshed"));
     }

@@ -130,7 +130,7 @@ public class TwoFactorService {
 
         // 4. Emitir tokens finales
         CustomUserPrincipal principal = new CustomUserPrincipal(user);
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId(), httpRequest);
         String accessToken = jwtService.generateToken(principal,  refreshToken.getId());
 
         return AuthResponse.builder()

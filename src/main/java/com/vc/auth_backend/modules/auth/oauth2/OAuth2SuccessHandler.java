@@ -45,7 +45,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     @Value("${app.oauth2.redirect-uri.failure}")
     private String failureRedirectUri;
 
-    @Value("${app.oauth2.redirect-uri.two-factor:http://localhost:4200/auth/2fa/verify}")
+    @Value("${app.oauth2.redirect-uri.two-factor:http://localhost:4200/auth/verify-2fa}")
     private String twoFactorRedirectUri;
 
     @Override
